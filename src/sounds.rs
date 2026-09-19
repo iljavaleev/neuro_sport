@@ -1,5 +1,6 @@
 use leptos::{prelude::*};
 use leptos::logging::log;
+use serde::{Deserialize, Serialize};
 
 use crate::timer::SoundTimer;
 
@@ -19,7 +20,7 @@ impl PartialEq for SoundButton {
 
 impl Eq for SoundButton {}
 
-#[derive(Debug, Clone)] 
+#[derive(Debug, Clone, Deserialize, Serialize)] 
 pub struct UserOptions{
     pub sounds: Vec<String>,
     pub round_count: i64,
@@ -61,11 +62,12 @@ static DIRECTIONS_SOUNDS: LazyLock<Vec<SoundButton>> = LazyLock::new(|| {
 
 static COLORS_SOUNDS: LazyLock<Vec<SoundButton>> = LazyLock::new(|| {
     vec![
-        SoundButton{ label: "Красное".to_string(), path: "path1".to_string() },
-        SoundButton{ label: "Синее".to_string(), path: "path2".to_string() },
-        SoundButton{ label: "Черное".to_string(), path: "path2".to_string() },
-        SoundButton{ label: "Зеленое".to_string(), path: "path2".to_string() },
-
+        SoundButton{ label: "Красный".to_string(), path: "../public/prepare/red.mp3".to_string() },
+        SoundButton{ label: "Синий".to_string(), path: "../public/prepare/blue.mp3".to_string() },
+        SoundButton{ label: "Черный".to_string(), path: "../public/prepare/black.mp3".to_string() },
+        SoundButton{ label: "Зеленый".to_string(), path: "../public/prepare/green.mp3".to_string() },
+        SoundButton{ label: "Желтый".to_string(), path: "../public/prepare/yellow.mp3".to_string() },
+        SoundButton{ label: "Серый".to_string(), path: "../public/prepare/grey.mp3".to_string() }
     ]
 });
 
@@ -80,8 +82,9 @@ pub fn sound_timer_component() -> impl IntoView{
     let timer_context_signal = RwSignal::new(timer_context);
     provide_context(timer_context_signal);
 
-   view! {
-        <h1>"Описание: вы выполняете действие в течение заданного времени и реагируете на звуковые сигналы, выполняя движения"</h1>
+    view! {
+        <h1>"Описание: вы выполняете действие в течение заданного времени и 
+        реагируете на звуковые сигналы, выполняя движения"</h1>
         <Show
             when=move || {  (*timer_context_signal.read()).view_timer == true }
             fallback=|| view! { <Sounds/> }

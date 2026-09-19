@@ -10,6 +10,8 @@ use serde_wasm_bindgen::to_value;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::spawn_local;
 
+use crate::sounds::{TimerContext, UserOptions};
+
 
 #[wasm_bindgen]
 extern "C" {
@@ -19,8 +21,13 @@ extern "C" {
 
 
 #[derive(Serialize, Deserialize)]
-struct SoundArgs {
+struct PrepareSoundArgs {
     filePath: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct RoundSoundArgs {
+    options: UserOptions,
 }
 
 
@@ -64,59 +71,21 @@ impl TimerStruct{
         *self.seconds.write() = seconds_display;
     }
 
-    fn interval_cb(&self){
+    fn interval_cb(&self, cb: Option<impl Fn() + 'static>){
         if *self.time_left.read() > 0 {
             *self.time_left.write() = self.time_left.get() - 1;
             self.update_display();
         }
     }
 
-    fn get_handle(self) -> RwSignal<Result<IntervalHandle, JsValue>>{
+    fn get_handle(self, mut cb: Option<impl Fn() + 'static>) -> RwSignal<Result<IntervalHandle, JsValue>>{
         RwSignal::new(
-            set_interval_with_handle(move || self.interval_cb(), time::Duration::from_secs(1))
+            set_interval_with_handle(move || self.interval_cb(cb.take()), time::Duration::from_secs(1))
         )
     }
     
 }
 
- // let n = round_len / freq;
-    // let l = paths.len();
-
-    // let handle = rodio::DeviceSinkBuilder::open_default_sink().expect("open default audio stream");
-    // let player = rodio::Player::connect_new(&handle.mixer());
-
-    // // vec of shared bytes for reuse
-    // let sources: Vec<Arc<[u8]>> = paths.iter().map(|path| {
-    //     let mut file = File::open(path).unwrap();
-    //     let mut buffer = Vec::new();
-    //     file.read_to_end(&mut buffer).unwrap();
-    //     let shared_bytes: Arc<[u8]> = Arc::from(buffer);
-    //     shared_bytes
-    // }).collect();
-    
-    // // vec of timestamps
-    // let range = freq as f64 * 0.2;
-    // let mut ts: Vec<f64> = (0..n).map(|_| freq  as f64 + rand::random_range(-range..range)).collect();
-    // ts[0] = 0.0;
-
-    // // vec of timestamp indexes
-    // let indexes = (0..n).map(|_| {rand::random_range(0..=l-1)}); 
-    // let mut ind_count = 0;
-
-    // for i in indexes{
-    //     let bytes_clone = sources[i].clone();
-    //     let cursor = Cursor::new(bytes_clone);
-    //     let source = Decoder::new(cursor).unwrap();
-
-    //     let delay = time::Duration::from_secs_f64(ts[ind_count]);
-    //     ind_count += 1;
-
-    //     thread::sleep(delay);
-    //     player.append(source);
-        
-        
-    // }
-    // player.sleep_until_end();
 
 use web_sys::{HtmlAudioElement, MouseEvent};
 use std::io::BufReader;
@@ -128,19 +97,11 @@ pub fn timer(time_to_count: i64, ended: Option<RwSignal<bool>>) -> impl IntoView
     
     let play_sound = move || {
         spawn_local(async move {
-            let args = to_value(&SoundArgs { filePath:"../public/prepare/prepare_timer.mp3".to_string() }).unwrap();
-            invoke("play_native_sound", args).await.as_f64().unwrap();
+            let args = to_value(&PrepareSoundArgs { filePath:"../public/prepare/prepare_timer.mp3".to_string() }).unwrap();
+            invoke("play_prepare_sound", args).await.as_f64().unwrap();
         });
     };
 
-    // let play_sound = move || {
-    //     // Path to your audio file (e.g., in your public/ assets folder)
-    //     if let Ok(audio) = HtmlAudioElement::new_with_src("/prepare_timer.mp3") {
-    //         let _ = audio.play();
-    //     }else {
-    //         log!("Not");
-    //     }
-    // };
     
     let interval_cb = move ||{
         if *timer_struct.time_left.read() == 4 {
@@ -181,20 +142,20 @@ pub fn timer(time_to_count: i64, ended: Option<RwSignal<bool>>) -> impl IntoView
 
 
 #[component]
-pub fn button_timer(time_to_count: i64) -> impl IntoView{
-    let timer_context = use_context::<RwSignal<TimerContext>>().expect("To find the count signal in context");
+pub fn button_timer(time_to_count: i64, cb: Option<impl Fn() + 'static>) -> impl IntoView{
+    let timer_context = 
+        use_context::<RwSignal<TimerContext>>()
+        .expect("To find the count signal in context");
 
     
     let timer_struct = TimerStruct::new(time_to_count);
-
-    let try_handle = timer_struct.get_handle();
+    let try_handle = timer_struct.get_handle(cb);
 
     if (try_handle.get_untracked()).is_err(){
         return view! {
             <div>Something whent wrong</div>
         }.into_any();
     }
-
 
     let reset_timer = move || {
        *timer_struct.time_left.write() = time_to_count;
@@ -204,7 +165,7 @@ pub fn button_timer(time_to_count: i64) -> impl IntoView{
     let resume_timer  = move || {
         try_handle.get().unwrap().clear();
         *try_handle.write() = set_interval_with_handle(
-        move || timer_struct.interval_cb(), 
+        move || timer_struct.interval_cb(cb.clone()), //
         time::Duration::from_secs(1));
     };
 
@@ -213,8 +174,12 @@ pub fn button_timer(time_to_count: i64) -> impl IntoView{
         <div>
             {move ||  
                 {   
-                    if timer_struct.time_left.get() == 0 { try_handle.get().unwrap().clear(); };
-                    view!{<p>{timer_struct.minutes.get()} : {timer_struct.seconds.get()}</p>}
+                    if timer_struct.time_left.get() == 0 { 
+                        try_handle.get().unwrap().clear(); 
+                    };
+                    view!{
+                        <p>{timer_struct.minutes.get()} : {timer_struct.seconds.get()}</p>
+                    }
                 } 
             }
             <button on:click=move |_| try_handle.get().unwrap().clear()>
@@ -238,18 +203,25 @@ pub fn button_timer(time_to_count: i64) -> impl IntoView{
 }
 
 
-use crate::sounds::TimerContext;
-
 #[component]
 pub fn sound_timer() -> impl IntoView{ 
     let ended = RwSignal::new(false);
-    let timer_context = use_context::<RwSignal<TimerContext>>().expect("To find the count signal in context");
+    let timer_context = 
+        use_context::<RwSignal<TimerContext>>()
+        .expect("To find the count signal in context");
+
 
 
     view!{
-         <Show when=move || ended.get()
-                fallback=move || view!{<Timer time_to_count=(*timer_context.read()).user_options.prepare_time ended=Some(ended)/>}>
-            <ButtonTimer time_to_count=(*timer_context.read()).user_options.round_time/>
+        <Show when=move || ended.get()
+                fallback=move || view!{
+                    <Timer 
+                        time_to_count=(*timer_context.read())
+                        .user_options.prepare_time ended=Some(ended) />
+                }>
+            <ButtonTimer 
+                time_to_count=(*timer_context.read())
+                .user_options.round_time />
         </Show>
     }
 }
