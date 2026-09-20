@@ -71,24 +71,21 @@ impl TimerStruct{
         *self.seconds.write() = seconds_display;
     }
 
-    fn interval_cb(&self, cb: Option<impl Fn() + 'static>){
+    fn interval_cb(&self){
         if *self.time_left.read() > 0 {
             *self.time_left.write() = self.time_left.get() - 1;
             self.update_display();
         }
     }
 
-    fn get_handle(self, mut cb: Option<impl Fn() + 'static>) -> RwSignal<Result<IntervalHandle, JsValue>>{
+    fn get_handle(self) -> RwSignal<Result<IntervalHandle, JsValue>>{
         RwSignal::new(
-            set_interval_with_handle(move || self.interval_cb(cb.take()), time::Duration::from_secs(1))
+            set_interval_with_handle(move || self.interval_cb(), time::Duration::from_secs(1))
         )
     }
     
 }
 
-
-use web_sys::{HtmlAudioElement, MouseEvent};
-use std::io::BufReader;
 
 
 #[component]
@@ -97,8 +94,11 @@ pub fn timer(time_to_count: i64, ended: Option<RwSignal<bool>>) -> impl IntoView
     
     let play_sound = move || {
         spawn_local(async move {
-            let args = to_value(&PrepareSoundArgs { filePath:"../public/prepare/prepare_timer.mp3".to_string() }).unwrap();
-            invoke("play_prepare_sound", args).await.as_f64().unwrap();
+            let args = to_value(&PrepareSoundArgs 
+                { 
+                    filePath:"../public/prepare/prepare_timer.mp3".to_string() 
+                }).unwrap();
+            invoke("play_prepare_sound", args).await.as_string().unwrap();
         });
     };
 
@@ -142,14 +142,14 @@ pub fn timer(time_to_count: i64, ended: Option<RwSignal<bool>>) -> impl IntoView
 
 
 #[component]
-pub fn button_timer(time_to_count: i64, cb: Option<impl Fn() + 'static>) -> impl IntoView{
+pub fn button_timer(time_to_count: i64) -> impl IntoView{
     let timer_context = 
         use_context::<RwSignal<TimerContext>>()
         .expect("To find the count signal in context");
 
     
     let timer_struct = TimerStruct::new(time_to_count);
-    let try_handle = timer_struct.get_handle(cb);
+    let try_handle = timer_struct.get_handle();
 
     if (try_handle.get_untracked()).is_err(){
         return view! {
@@ -165,7 +165,7 @@ pub fn button_timer(time_to_count: i64, cb: Option<impl Fn() + 'static>) -> impl
     let resume_timer  = move || {
         try_handle.get().unwrap().clear();
         *try_handle.write() = set_interval_with_handle(
-        move || timer_struct.interval_cb(cb.clone()), //
+        move || timer_struct.interval_cb(), //
         time::Duration::from_secs(1));
     };
 
@@ -210,8 +210,16 @@ pub fn sound_timer() -> impl IntoView{
         use_context::<RwSignal<TimerContext>>()
         .expect("To find the count signal in context");
 
+    let play_sound = move || {
+        spawn_local(async move {
+            let args = to_value(&RoundSoundArgs { 
+                options: (*timer_context.read()).user_options.clone() }
+            ).unwrap();
+            invoke("play_sound_round", args).await.as_string().unwrap();
+        });
+    };
 
-
+    
     view!{
         <Show when=move || ended.get()
                 fallback=move || view!{

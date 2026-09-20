@@ -3,12 +3,27 @@
 use std::{fs::File, option};
 use std::io::BufReader;
 use rodio::{Decoder, MixerDeviceSink, source::Source};
-use std::sync::Arc;
 use std::io::{self, Read};
 use std::io::Cursor;
 use std::time;
 use std::thread;
 use serde::Deserialize;
+
+use std::sync::atomic::{AtomicBool, Ordering};
+use tauri::State;
+use std::sync::{Mutex, Arc, Condvar};
+use atomic_enum::atomic_enum;
+
+
+#[atomic_enum]
+#[derive(PartialEq)]
+enum Action {
+    Start,
+    Stop,
+    Resume,
+    End,
+}
+
 
 
 #[tauri::command]
@@ -17,8 +32,7 @@ fn play_prepare_sound(file_path: String) -> Result<(), String> {
     std::thread::spawn(move || {
         let handle = rodio::DeviceSinkBuilder::open_default_sink()
         .expect("open default audio stream");
-        let player = rodio::Player::connect_new(&handle.mixer());
-        println!("{file_path}");           
+        let player = rodio::Player::connect_new(&handle.mixer());         
         let file = File::open(file_path).unwrap();
         // Decode that sound file into a source
         let source = Decoder::try_from(file).unwrap();
@@ -41,10 +55,38 @@ pub struct UserOptions{
     pub signal_freq: Option<f64>,
 }
 
+struct TaskState {
+    abort_handle: Mutex<Option<tokio::task::AbortHandle>>,
+}
+
+struct TaskControl {
+    action: Mutex<Action>,
+    condvar: Condvar,
+}
+
+struct AppState {
+    control: Arc<TaskControl>,
+}
+
+// fn start_play_sound_round(options: UserOptions, state: State<'_, TaskState>) -> Result<(), String> {
 #[tauri::command]
-fn play_sound_round(options: UserOptions) -> Result<(), String> {
-    // Run this in a background thread so it doesn't freeze your UI
-    std::thread::spawn(move || {
+fn start_play_sound_round(options: UserOptions, state: State<'_, AppState>) -> Result<(), String> {
+
+    let handle = tokio::spawn(async move {
+        
+        {
+            let mut active = state.control.action.lock().unwrap();
+            // If false (paused), wait until condvar is notified
+            let a = *active;
+            while let Action::Stop(pend) = a.load() {
+                println!("Thread is paused. Sleeping...");
+                active = control.condvar.wait(active).unwrap();
+                println!("Thread woke up!");
+            }
+        }
+        
+        
+        
         let handle = rodio::DeviceSinkBuilder::open_default_sink().expect("open default audio stream");
         let player = rodio::Player::connect_new(&handle.mixer());
         
@@ -95,19 +137,26 @@ fn play_sound_round(options: UserOptions) -> Result<(), String> {
         player.sleep_until_end();
 
         });
-
-
+    
+    
+    *state.abort_handle.lock().unwrap() = Some(handle.abort_handle());    
     Ok(())
 }
 
 
+#[tauri::command]
+fn stop_play_sound_round(state: State<'_, TaskState>) {
+    if let Some(handle) = state.abort_handle.lock().unwrap().take() {
+        handle.abort();
+    }
+}
 
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![play_prepare_sound, play_sound_round])
+        .invoke_handler(tauri::generate_handler![play_prepare_sound, start_play_sound_round, stop_play_sound_round])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
