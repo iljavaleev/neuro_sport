@@ -19,9 +19,15 @@ extern "C" {
     async fn invoke(cmd: &str, args: JsValue) -> JsValue;
 }
 
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(js_namespace = ["window", "__TAURI__", "core"], js_name = invoke)]
+    async fn invoke_no_args(cmd: &str) -> JsValue;
+}
+
 
 #[derive(Serialize, Deserialize)]
-struct PrepareSoundArgs {
+struct SoundArgs {
     filePath: String,
 }
 
@@ -70,20 +76,7 @@ impl TimerStruct{
         *self.minutes.write() = minuts_display;
         *self.seconds.write() = seconds_display;
     }
-
-    fn interval_cb(&self){
-        if *self.time_left.read() > 0 {
-            *self.time_left.write() = self.time_left.get() - 1;
-            self.update_display();
-        }
-    }
-
-    fn get_handle(self) -> RwSignal<Result<IntervalHandle, JsValue>>{
-        RwSignal::new(
-            set_interval_with_handle(move || self.interval_cb(), time::Duration::from_secs(1))
-        )
-    }
-    
+ 
 }
 
 
@@ -94,11 +87,11 @@ pub fn timer(time_to_count: i64, ended: Option<RwSignal<bool>>) -> impl IntoView
     
     let play_sound = move || {
         spawn_local(async move {
-            let args = to_value(&PrepareSoundArgs 
+            let args = to_value(&SoundArgs 
                 { 
                     filePath:"../public/prepare/prepare_timer.mp3".to_string() 
                 }).unwrap();
-            invoke("play_prepare_sound", args).await.as_string().unwrap();
+            invoke("play_sound", args).await.as_string().unwrap();
         });
     };
 
@@ -146,27 +139,88 @@ pub fn button_timer(time_to_count: i64) -> impl IntoView{
     let timer_context = 
         use_context::<RwSignal<TimerContext>>()
         .expect("To find the count signal in context");
-
     
     let timer_struct = TimerStruct::new(time_to_count);
-    let try_handle = timer_struct.get_handle();
+    
+    let play_round_timer = move || {
+        spawn_local(async move {
+            let args = to_value(&RoundSoundArgs { 
+                options: (*timer_context.read()).user_options.clone() }
+            ).unwrap();
+            invoke("start_play_sound_round", args).await.as_string().unwrap();
+        });
+    };
 
-    if (try_handle.get_untracked()).is_err(){
-        return view! {
-            <div>Something whent wrong</div>
-        }.into_any();
-    }
+    let play_end_sound = move || {
+        spawn_local(async move {
+            let args = to_value(&SoundArgs 
+                { 
+                    filePath:"../public/prepare/end_of_round.mp3".to_string() 
+                }).unwrap();
+            invoke("play_sound", args).await.as_string().unwrap();
+        });
+    };
+
+
+    let pause_round = move || {
+        spawn_local(async move {
+            invoke_no_args("pause_play_sound_round")
+            .await
+            .as_string()
+            .unwrap();
+        });
+    };
+
+
+    let resume_round = move || {
+        spawn_local(async move {
+            invoke_no_args("resume_play_sound_round")
+            .await
+            .as_string()
+            .unwrap();
+        });
+    };
+
+
+    let abort_round = move || {
+        spawn_local(async move {
+            invoke_no_args("abort_play_sound_round")
+            .await
+            .as_string()
+            .unwrap();
+        });
+    };
+
+    let interval_cb = move ||{
+        if *timer_struct.time_left.read() == 1 {
+            play_end_sound();
+        }
+        
+
+        if *timer_struct.time_left.read() > 0 {
+            *timer_struct.time_left.write() = timer_struct.time_left.get() - 1;
+            timer_struct.update_display();
+        }
+    };
+
+    let try_handle =  RwSignal::new(
+        set_interval_with_handle(interval_cb, time::Duration::from_secs(1))
+    );
 
     let reset_timer = move || {
        *timer_struct.time_left.write() = time_to_count;
         timer_struct.update_display();
+        abort_round();
+        play_round_timer();
+        pause_round();
     };
    
     let resume_timer  = move || {
         try_handle.get().unwrap().clear();
         *try_handle.write() = set_interval_with_handle(
-        move || timer_struct.interval_cb(), //
-        time::Duration::from_secs(1));
+            move || interval_cb(), //
+            time::Duration::from_secs(1));
+        resume_round();
     };
 
     
@@ -210,14 +264,7 @@ pub fn sound_timer() -> impl IntoView{
         use_context::<RwSignal<TimerContext>>()
         .expect("To find the count signal in context");
 
-    let play_sound = move || {
-        spawn_local(async move {
-            let args = to_value(&RoundSoundArgs { 
-                options: (*timer_context.read()).user_options.clone() }
-            ).unwrap();
-            invoke("play_sound_round", args).await.as_string().unwrap();
-        });
-    };
+   
 
     
     view!{
