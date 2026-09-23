@@ -12,7 +12,8 @@ use serde::Deserialize;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::State;
 use std::sync::{Mutex, Arc, Condvar};
-
+use log::{info, error}; 
+use tokio::task::JoinHandle;
 
 
 #[tauri::command]
@@ -56,16 +57,30 @@ struct AppState {
     control: Arc<TaskControl>,
 }
 
+impl AppState {
+    fn new() -> Self{
+        Self { control: Arc::new(
+            TaskControl { 
+                is_running: Mutex::new(AtomicBool::new(false)), 
+                is_stopped: Mutex::new(AtomicBool::new(true)), 
+                condvar: Condvar::new(), 
+                abort_handle: Mutex::new(None), 
+            }
+        ) 
+    }
+    }
+}
+
 
 #[tauri::command]
-fn start_play_sound_round(options: UserOptions, state: State<'_, AppState>) -> Result<(), String> {
+async fn start_play_sound_round(state: State<'_, AppState>, options: UserOptions) -> Result<(), String> {
     let control = state.control.clone();
     
     {
         control.is_running.lock().unwrap().store(true, Ordering::Relaxed);
         control.is_stopped.lock().unwrap().store(false, Ordering::Relaxed);
     }
-    let handle = tokio::spawn(async move {
+    let handle: JoinHandle<Result<(), String>> = tokio::spawn(async move {
         
         let handle = rodio::DeviceSinkBuilder::open_default_sink().expect("open default audio stream");
         let player = rodio::Player::connect_new(&handle.mixer());
@@ -74,7 +89,12 @@ fn start_play_sound_round(options: UserOptions, state: State<'_, AppState>) -> R
         if let Some(freq) = options.signal_freq{
             let n = (options.round_time as f64 / freq) as i32;
             let l = options.sounds.len();
-            
+            if l == 0{
+                let error= String::from("Empty sound list");
+                error!("{}", error.clone());
+                return Err(error);
+            }
+
             let sources: Vec<Arc<[u8]>> = options.sounds.iter().map(|path| {
                 let mut file = File::open(path).unwrap();
                 let mut buffer = Vec::new();
@@ -83,24 +103,25 @@ fn start_play_sound_round(options: UserOptions, state: State<'_, AppState>) -> R
                 shared_bytes
             }).collect();
 
-            let mut ts = Vec::<f64>::new();
-
-            match options.signal_variants{
-                // если есть вариативность исполнения
-                Some(1) => {
-                    // vec of timestamps
-                    let range = freq as f64 * 0.2;
-                    ts = (0..n).map(|_| freq  as f64 + rand::random_range(-range..range)).collect();
-                },
-                _ => {
-                    ts = (0..n).map(|_| freq  as f64).collect();
-                }
+            let mut ts: Vec<f64> = if Some(1) == options.signal_variants{
+            
+                // vec of timestamps
+                let range = freq as f64 * 0.2;
+                (0..n).map(|_| freq  as f64 + rand::random_range(-range..range)).collect()
             }
-            ts[0] = 0.0; 
+            else {
+                (0..n).map(|_| freq  as f64).collect()
+            };
+            
+            ts[0] = 0.5; 
             let indexes = (0..n).map(|_| {rand::random_range(0..=l-1)}); 
             let mut ind_count = 0;
 
             for i in indexes{
+                let delay = time::Duration::from_secs_f64(ts[ind_count]);
+                ind_count += 1;
+                tokio::time::sleep(delay).await;
+                
                 {
                     let mut is_stopped = control.is_stopped.lock().unwrap();
                     while is_stopped.load(Ordering::Relaxed) == true {
@@ -108,27 +129,23 @@ fn start_play_sound_round(options: UserOptions, state: State<'_, AppState>) -> R
                     }
                 }
                 
-                
-                
                 let bytes_clone = sources[i].clone();
                 let cursor = Cursor::new(bytes_clone);
                 let source = Decoder::new(cursor).unwrap();
-
-                let delay = time::Duration::from_secs_f64(ts[ind_count]);
-                ind_count += 1;
-
-                thread::sleep(delay);
+                
                 player.append(source);
             }
         }
         
-        
-        player.sleep_until_end();
-
+            player.sleep_until_end();
+            Ok(())
         });
     
     
-    *state.control.abort_handle.lock().unwrap() = Some(handle.abort_handle());    
+    *state.control.abort_handle.lock().unwrap() = Some(handle.abort_handle());
+    if let Err(err_string) = handle.await{
+        return Err(err_string.to_string());
+    }    
     Ok(())
 }
 
@@ -161,7 +178,9 @@ fn resume_play_sound_round(state: State<'_, AppState>) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .manage(AppState::new())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_log::Builder::default().build())
         .invoke_handler(tauri::generate_handler![
             play_sound, 
             start_play_sound_round, 

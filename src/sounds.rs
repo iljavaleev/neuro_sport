@@ -62,12 +62,12 @@ static DIRECTIONS_SOUNDS: LazyLock<Vec<SoundButton>> = LazyLock::new(|| {
 
 static COLORS_SOUNDS: LazyLock<Vec<SoundButton>> = LazyLock::new(|| {
     vec![
-        SoundButton{ label: "Красный".to_string(), path: "../public/prepare/red.mp3".to_string() },
-        SoundButton{ label: "Синий".to_string(), path: "../public/prepare/blue.mp3".to_string() },
-        SoundButton{ label: "Черный".to_string(), path: "../public/prepare/black.mp3".to_string() },
-        SoundButton{ label: "Зеленый".to_string(), path: "../public/prepare/green.mp3".to_string() },
-        SoundButton{ label: "Желтый".to_string(), path: "../public/prepare/yellow.mp3".to_string() },
-        SoundButton{ label: "Серый".to_string(), path: "../public/prepare/grey.mp3".to_string() }
+        SoundButton{ label: "Красный".to_string(), path: "../public/colors/red.mp3".to_string() },
+        SoundButton{ label: "Синий".to_string(), path: "../public/colors/blue.mp3".to_string() },
+        SoundButton{ label: "Черный".to_string(), path: "../public/colors/black.mp3".to_string() },
+        SoundButton{ label: "Зеленый".to_string(), path: "../public/colors/green.mp3".to_string() },
+        SoundButton{ label: "Желтый".to_string(), path: "../public/colors/yellow.mp3".to_string() },
+        SoundButton{ label: "Серый".to_string(), path: "../public/colors/grey.mp3".to_string() }
     ]
 });
 
@@ -268,7 +268,7 @@ pub fn sounds() -> impl IntoView{
                     .read()
                     .iter()
                     .filter(|(_, _, signal)|{signal.read() == true})
-                    .map(|(_, path, _)| path)
+                    .map(|(path, _, _)| path)
                     .cloned()
                     .collect();
                 (*timer_context.write()).view_timer = true;             

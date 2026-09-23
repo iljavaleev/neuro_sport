@@ -80,7 +80,6 @@ impl TimerStruct{
 }
 
 
-
 #[component]
 pub fn timer(time_to_count: i64, ended: Option<RwSignal<bool>>) -> impl IntoView{
     let timer_struct = TimerStruct::new(time_to_count);
@@ -91,7 +90,7 @@ pub fn timer(time_to_count: i64, ended: Option<RwSignal<bool>>) -> impl IntoView
                 { 
                     filePath:"../public/prepare/prepare_timer.mp3".to_string() 
                 }).unwrap();
-            invoke("play_sound", args).await.as_string().unwrap();
+            invoke("play_sound", args).await.as_string();
         });
     };
 
@@ -142,10 +141,11 @@ pub fn button_timer(time_to_count: i64) -> impl IntoView{
     
     let timer_struct = TimerStruct::new(time_to_count);
     
+    // backend handlers
     let play_round_timer = move || {
         spawn_local(async move {
             let args = to_value(&RoundSoundArgs { 
-                options: (*timer_context.read()).user_options.clone() }
+                options: timer_context.get_untracked().user_options }
             ).unwrap();
             invoke("start_play_sound_round", args).await.as_string().unwrap();
         });
@@ -161,7 +161,6 @@ pub fn button_timer(time_to_count: i64) -> impl IntoView{
         });
     };
 
-
     let pause_round = move || {
         spawn_local(async move {
             invoke_no_args("pause_play_sound_round")
@@ -171,7 +170,6 @@ pub fn button_timer(time_to_count: i64) -> impl IntoView{
         });
     };
 
-
     let resume_round = move || {
         spawn_local(async move {
             invoke_no_args("resume_play_sound_round")
@@ -180,7 +178,6 @@ pub fn button_timer(time_to_count: i64) -> impl IntoView{
             .unwrap();
         });
     };
-
 
     let abort_round = move || {
         spawn_local(async move {
@@ -195,8 +192,6 @@ pub fn button_timer(time_to_count: i64) -> impl IntoView{
         if *timer_struct.time_left.read() == 1 {
             play_end_sound();
         }
-        
-
         if *timer_struct.time_left.read() > 0 {
             *timer_struct.time_left.write() = timer_struct.time_left.get() - 1;
             timer_struct.update_display();
@@ -207,12 +202,10 @@ pub fn button_timer(time_to_count: i64) -> impl IntoView{
         set_interval_with_handle(interval_cb, time::Duration::from_secs(1))
     );
 
+    // frontend timer
     let reset_timer = move || {
        *timer_struct.time_left.write() = time_to_count;
         timer_struct.update_display();
-        abort_round();
-        play_round_timer();
-        pause_round();
     };
    
     let resume_timer  = move || {
@@ -220,8 +213,11 @@ pub fn button_timer(time_to_count: i64) -> impl IntoView{
         *try_handle.write() = set_interval_with_handle(
             move || interval_cb(), //
             time::Duration::from_secs(1));
-        resume_round();
     };
+
+    Effect::new(move |_| {
+        play_round_timer();
+    });
 
     
     view!{
@@ -236,18 +232,29 @@ pub fn button_timer(time_to_count: i64) -> impl IntoView{
                     }
                 } 
             }
-            <button on:click=move |_| try_handle.get().unwrap().clear()>
+            <button on:click=move |_| {
+                try_handle.get().unwrap().clear();
+                pause_round()
+            }>
                 "Пауза"
             </button>
-            <button on:click=move |_| resume_timer() >
+            <button on:click=move |_| { 
+                resume_timer(); 
+                resume_round() } >
                 "Продолжить"
             </button>
-             <button on:click=move |_| {reset_timer(); resume_timer()} >
+             <button on:click=move |_| {
+                abort_round();
+                reset_timer();
+                play_round_timer();
+                resume_timer()
+            } >
                 "Заново"
             </button>
             <button on:click=move |_| { 
                 (*timer_context.write()).view_timer = false;
                 try_handle.get().unwrap().clear();
+                abort_round();
             } >
                 "Вернуться к настройкам"
             </button>
@@ -263,9 +270,6 @@ pub fn sound_timer() -> impl IntoView{
     let timer_context = 
         use_context::<RwSignal<TimerContext>>()
         .expect("To find the count signal in context");
-
-   
-
     
     view!{
         <Show when=move || ended.get()
