@@ -1,7 +1,6 @@
 use leptos::{prelude::*};
-use leptos::logging::log;
 use wasm_bindgen::JsValue;
-
+use log::{info, error}; 
 use core::time;
 
 use std::io::{Read as read_io};
@@ -15,14 +14,14 @@ use crate::sounds::{TimerContext, UserOptions};
 
 #[wasm_bindgen]
 extern "C" {
-    #[wasm_bindgen(js_namespace = ["window", "__TAURI__", "core"])]
-    async fn invoke(cmd: &str, args: JsValue) -> JsValue;
+    #[wasm_bindgen(js_namespace = ["window", "__TAURI__", "core"], catch)]
+    async fn invoke(cmd: &str, args: JsValue) -> Result<JsValue, JsValue>;
 }
 
 #[wasm_bindgen]
 extern "C" {
-    #[wasm_bindgen(js_namespace = ["window", "__TAURI__", "core"], js_name = invoke)]
-    async fn invoke_no_args(cmd: &str) -> JsValue;
+    #[wasm_bindgen(js_namespace = ["window", "__TAURI__", "core"], js_name = "invoke", catch)]
+    async fn invoke_no_args(cmd: &str) -> Result<JsValue, JsValue>;
 }
 
 
@@ -90,7 +89,14 @@ pub fn timer(time_to_count: i64, ended: Option<RwSignal<bool>>) -> impl IntoView
                 { 
                     filePath:"../public/prepare/prepare_timer.mp3".to_string() 
                 }).unwrap();
-            invoke("play_sound", args).await.as_string();
+            match invoke("play_sound", args).await{
+                Ok(_) => (),
+                Err(js_error) => {
+                    let error_msg: String = serde_wasm_bindgen::from_value(js_error)
+                        .unwrap_or_else(|_| "Unknown Tauri backend error".to_string());
+                    error!("{}", error_msg);
+                }
+            }
         });
     };
 
@@ -147,7 +153,15 @@ pub fn button_timer(time_to_count: i64) -> impl IntoView{
             let args = to_value(&RoundSoundArgs { 
                 options: timer_context.get_untracked().user_options }
             ).unwrap();
-            invoke("start_play_sound_round", args).await.as_string().unwrap();
+            
+            match invoke("start_play_sound_round", args).await{
+                Ok(_) => (),
+                Err(js_error) => {
+                    let error_msg: String = serde_wasm_bindgen::from_value(js_error)
+                        .unwrap_or_else(|_| "Unknown Tauri backend error".to_string());
+                    error!("{}", error_msg);
+                }
+            }
         });
     };
 
@@ -157,34 +171,56 @@ pub fn button_timer(time_to_count: i64) -> impl IntoView{
                 { 
                     filePath:"../public/prepare/end_of_round.mp3".to_string() 
                 }).unwrap();
-            invoke("play_sound", args).await.as_string().unwrap();
+
+            match invoke("play_sound", args).await{
+                Ok(_) => (),
+                Err(js_error) => {
+                    let error_msg: String = serde_wasm_bindgen::from_value(js_error)
+                        .unwrap_or_else(|_| "Unknown Tauri backend error".to_string());
+                    error!("{}", error_msg);
+                }
+            }
         });
     };
 
     let pause_round = move || {
+        info!("IN");
         spawn_local(async move {
-            invoke_no_args("pause_play_sound_round")
-            .await
-            .as_string()
-            .unwrap();
+            match invoke_no_args("pause_play_sound_round",).await{
+                Ok(_) => (),
+                Err(js_error) => {
+                    let error_msg: String = serde_wasm_bindgen::from_value(js_error)
+                        .unwrap_or_else(|_| "Unknown Tauri backend error".to_string());
+                    error!("{}", error_msg);
+                }
+            }
         });
     };
 
     let resume_round = move || {
         spawn_local(async move {
-            invoke_no_args("resume_play_sound_round")
-            .await
-            .as_string()
-            .unwrap();
+            match invoke_no_args("resume_play_sound_round",).await{
+                Ok(_) => (),
+                Err(js_error) => {
+                    let error_msg: String = serde_wasm_bindgen::from_value(js_error)
+                        .unwrap_or_else(|_| "Unknown Tauri backend error".to_string());
+                    error!("{}", error_msg);
+                }
+            }
+            
         });
     };
 
     let abort_round = move || {
         spawn_local(async move {
-            invoke_no_args("abort_play_sound_round")
-            .await
-            .as_string()
-            .unwrap();
+            match invoke_no_args("abort_play_sound_round",).await{
+                Ok(_) => (),
+                Err(js_error) => {
+                    let error_msg: String = serde_wasm_bindgen::from_value(js_error)
+                        .unwrap_or_else(|_| "Unknown Tauri backend error".to_string());
+                    error!("{}", error_msg);
+                }
+            } 
         });
     };
 

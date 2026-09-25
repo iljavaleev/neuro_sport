@@ -5,32 +5,35 @@ use std::io::BufReader;
 use rodio::{Decoder, MixerDeviceSink, source::Source};
 use std::io::{self, Read};
 use std::io::Cursor;
-use std::time;
+use std::time::{self, Duration};
 use std::thread;
 use serde::Deserialize;
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::State;
 use std::sync::{Mutex, Arc, Condvar};
-use log::{info, error}; 
+use log::{error, info, log}; 
 use tokio::task::JoinHandle;
 
 
 #[tauri::command]
-fn play_sound(file_path: String) -> Result<(), String> {
-    // Run this in a background thread so it doesn't freeze your UI
-    std::thread::spawn(move || {
+async fn play_sound(file_path: String) -> Result<(), String> {
+   
         let handle = rodio::DeviceSinkBuilder::open_default_sink()
         .expect("open default audio stream");
         let player = rodio::Player::connect_new(&handle.mixer());         
         let file = File::open(file_path).unwrap();
-        // Decode that sound file into a source
-        let source = Decoder::try_from(file).unwrap();
-        player.append(source);
-        player.sleep_until_end(); // Plays until audio is complete
-    });
-
-    Ok(())
+        
+        
+        if let Ok(source) = Decoder::try_from(file){
+            player.append(source);
+            player.sleep_until_end(); 
+            Ok(())
+        }else {
+            error!("Error decoding file");
+            Err("Error decoding file".to_string())
+        }
+  
 }
 
 
@@ -80,10 +83,11 @@ async fn start_play_sound_round(state: State<'_, AppState>, options: UserOptions
         control.is_running.lock().unwrap().store(true, Ordering::Relaxed);
         control.is_stopped.lock().unwrap().store(false, Ordering::Relaxed);
     }
+
     let handle: JoinHandle<Result<(), String>> = tokio::spawn(async move {
         
-        let handle = rodio::DeviceSinkBuilder::open_default_sink().expect("open default audio stream");
-        let player = rodio::Player::connect_new(&handle.mixer());
+        let hndl = rodio::DeviceSinkBuilder::open_default_sink().expect("open default audio stream");
+        let player = rodio::Player::connect_new(&hndl.mixer());
         
         // если указана частота 
         if let Some(freq) = options.signal_freq{
@@ -123,8 +127,10 @@ async fn start_play_sound_round(state: State<'_, AppState>, options: UserOptions
                 tokio::time::sleep(delay).await;
                 
                 {
+                    
                     let mut is_stopped = control.is_stopped.lock().unwrap();
                     while is_stopped.load(Ordering::Relaxed) == true {
+                        info!("stopped");
                         is_stopped = control.condvar.wait(is_stopped).unwrap();
                     }
                 }
@@ -151,27 +157,37 @@ async fn start_play_sound_round(state: State<'_, AppState>, options: UserOptions
 
 
 #[tauri::command]
-fn abort_play_sound_round(state: State<'_, AppState>) {
-    if let Some(handle) = state.control.abort_handle.lock().unwrap().take() {
-        handle.abort();
-    }
+async fn abort_play_sound_round(state: State<'_, AppState>) -> Result<(), String>{
+    let Some(handle) = state
+        .control
+        .abort_handle
+        .lock()
+        .unwrap()
+        .take() else{
+        return Err("Handle is not ready".to_string());
+    };
+    handle.abort();
+    Ok(())
 }
 
 
 #[tauri::command]
-fn pause_play_sound_round(state: State<'_, AppState>) {
+async fn pause_play_sound_round(state: State<'_, AppState>) -> Result<(), String> {
     let is_stopped = state.control.is_stopped.lock().unwrap();
+    info!("stop");
     (*is_stopped).store(true, Ordering::Relaxed);
+    Ok(())
 }
 
 
 #[tauri::command]
-fn resume_play_sound_round(state: State<'_, AppState>) {
+async fn resume_play_sound_round(state: State<'_, AppState>) -> Result<(), String> {
    {
         let is_stopped = state.control.is_stopped.lock().unwrap();
-        (*is_stopped).store(false, Ordering::Relaxed);
+        (*is_stopped).store(false, Ordering::SeqCst);
     }
    state.control.condvar.notify_one();
+   Ok(())
 }
 
 
