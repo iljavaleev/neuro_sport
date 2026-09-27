@@ -43,9 +43,10 @@ pub struct UserOptions{
     pub round_count: i64,
     pub prepare_time: i64,
     pub round_time: i64,
-    pub rest_time: Option<i64>,
+    pub on_touch: i64,
+    pub rest_time: i64,
     pub signal_variants: Option<i32>,
-    pub signal_freq: Option<f64>,
+    pub signal_freq: f64,
 }
 
 
@@ -90,8 +91,8 @@ async fn start_play_sound_round(state: State<'_, AppState>, options: UserOptions
         let player = rodio::Player::connect_new(&hndl.mixer());
         
         // если указана частота 
-        if let Some(freq) = options.signal_freq{
-            let n = (options.round_time as f64 / freq) as i32;
+        if options.on_touch == 0{
+            let n = (options.round_time as f64 / options.signal_freq) as i32;
             let l = options.sounds.len();
             if l == 0{
                 let error= String::from("Empty sound list");
@@ -110,11 +111,11 @@ async fn start_play_sound_round(state: State<'_, AppState>, options: UserOptions
             let mut ts: Vec<f64> = if Some(1) == options.signal_variants{
             
                 // vec of timestamps
-                let range = freq as f64 * 0.2;
-                (0..n).map(|_| freq  as f64 + rand::random_range(-range..range)).collect()
+                let range = options.signal_freq as f64 * 0.2;
+                (0..n).map(|_| options.signal_freq  as f64 + rand::random_range(-range..range)).collect()
             }
             else {
-                (0..n).map(|_| freq  as f64).collect()
+                (0..n).map(|_| options.signal_freq  as f64).collect()
             };
             
             ts[0] = 0.5; 
@@ -174,7 +175,6 @@ async fn abort_play_sound_round(state: State<'_, AppState>) -> Result<(), String
 #[tauri::command]
 async fn pause_play_sound_round(state: State<'_, AppState>) -> Result<(), String> {
     let is_stopped = state.control.is_stopped.lock().unwrap();
-    info!("stop");
     (*is_stopped).store(true, Ordering::Relaxed);
     Ok(())
 }

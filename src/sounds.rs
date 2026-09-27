@@ -26,21 +26,23 @@ pub struct UserOptions{
     pub round_count: i64,
     pub prepare_time: i64,
     pub round_time: i64,
-    pub rest_time: Option<i64>,
+    pub on_touch: i64,
+    pub rest_time: i64,
     pub signal_variants: Option<i32>,
-    pub signal_freq: Option<f64>,
+    pub signal_freq: f64,
 }
 
 impl UserOptions {
     fn new()-> Self {
         Self {
             sounds: Vec::<String>::new(),
-            prepare_time: 10,
+            prepare_time: 5,
             round_count: 1, // если один раунд, то отдых не нужен
             round_time: 60,
-            rest_time: Some(10),
+            on_touch: 0,
+            rest_time: 10,
             signal_variants: Some(0),
-            signal_freq: Some(3.0),
+            signal_freq: 3.0,
         }
     }
 }
@@ -100,9 +102,7 @@ pub fn sounds() -> impl IntoView{
     let timer_context = use_context::<RwSignal<TimerContext>>().expect("To find the count signal in context");
 
     let (category, set_category) = signal(0);
-    let (touch, set_touch) = signal(0);
-
-
+    
     let initial_choices = COLORS_SOUNDS
             .iter()
             .map(|btn| (btn.path.clone(), 
@@ -173,6 +173,17 @@ pub fn sounds() -> impl IntoView{
         </div>
         
         <div>
+            <p>"Время на подготовку"</p>
+            <input 
+                type="text"
+
+                prop:value=move || (*timer_context.read()).user_options.prepare_time
+                
+                on:input:target=move |ev| {
+                    (*timer_context.write()).user_options.prepare_time = 
+                    ev.target().value().parse::<i64>().unwrap_or(0);
+                }
+            />
             <p>"Количество раундов"</p>
             <input 
                 type="text"
@@ -184,17 +195,6 @@ pub fn sounds() -> impl IntoView{
                     ev.target().value().parse::<i64>().unwrap_or(0);
                 }
                 
-            />
-            <p>"Время на подготовку"</p>
-            <input 
-                type="text"
-
-                prop:value=move || (*timer_context.read()).user_options.prepare_time
-                
-                on:input:target=move |ev| {
-                    (*timer_context.write()).user_options.prepare_time = 
-                    ev.target().value().parse::<i64>().unwrap_or(0);
-                }
             />
             <p>"Длительность раунда"</p>
             <input 
@@ -215,17 +215,18 @@ pub fn sounds() -> impl IntoView{
                 
                 on:input:target=move |ev| {
                     (*timer_context.write()).user_options.rest_time = 
-                    Some(ev.target().value().parse::<i64>().unwrap_or(0));
+                    ev.target().value().parse::<i64>().unwrap_or(0);
                 }
             />
         </div>
         <div>
             <p>"C касанием:"</p>
             <select
-                prop:value=move || *touch.read()
+                prop:value=move || (*timer_context.read()).user_options.on_touch
 
                 on:change:target=move |ev| {
-                    set_touch.set(ev.target().value().parse().unwrap());
+                    (*timer_context.write()).user_options.on_touch = 
+                    ev.target().value().parse().unwrap_or(0);
                 }
             >
                 <option value=0>"Нет"</option>
@@ -234,7 +235,7 @@ pub fn sounds() -> impl IntoView{
         </div>
         
         <div>
-            {move || if touch.get() == 0 {
+            {move || if(*timer_context.read()).user_options.on_touch == 0 {
                 view!{<p>"Вариативность сигнала (да/нет)"</p>
                     <select
                         prop:value=move || (*timer_context.read()).user_options.signal_variants
@@ -247,19 +248,22 @@ pub fn sounds() -> impl IntoView{
                         <option value=0>"Нет"</option>
                         <option value=1>"Да"</option>
                     </select>
-                <p>"Частота сигнала"</p>
-                <input type="number"
-                    on:input:target=move |ev| {
-                        (*timer_context.write()).user_options.signal_freq = 
-                        Some(ev.target().value().parse::<f64>().unwrap());
-
-                    }
-                    prop:value=(*timer_context.read()).user_options.signal_freq
-                />}.into_any()
+                }.into_any()
             }else{
                 view!{<div></div>}.into_any()
             }
         }
+        </div>
+        <div>
+            <p>"Пауза между сигналами"</p>
+                <input type="number"
+                    on:input:target=move |ev| {
+                        (*timer_context.write()).user_options.signal_freq = 
+                        ev.target().value().parse::<f64>().unwrap();
+
+                    }
+                    prop:value=timer_context.get_untracked().user_options.signal_freq
+                />
         </div>
         <div>
             <p>"Начать тренировку!"</p>

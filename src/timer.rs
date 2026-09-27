@@ -140,7 +140,7 @@ pub fn timer(time_to_count: i64, ended: Option<RwSignal<bool>>) -> impl IntoView
 
 
 #[component]
-pub fn button_timer(time_to_count: i64) -> impl IntoView{
+pub fn button_timer(time_to_count: i64, ended: Option<RwSignal<bool>>) -> impl IntoView{
     let timer_context = 
         use_context::<RwSignal<TimerContext>>()
         .expect("To find the count signal in context");
@@ -184,7 +184,6 @@ pub fn button_timer(time_to_count: i64) -> impl IntoView{
     };
 
     let pause_round = move || {
-        info!("IN");
         spawn_local(async move {
             match invoke_no_args("pause_play_sound_round",).await{
                 Ok(_) => (),
@@ -223,7 +222,7 @@ pub fn button_timer(time_to_count: i64) -> impl IntoView{
             } 
         });
     };
-
+    
     let interval_cb = move ||{
         if *timer_struct.time_left.read() == 1 {
             play_end_sound();
@@ -231,6 +230,20 @@ pub fn button_timer(time_to_count: i64) -> impl IntoView{
         if *timer_struct.time_left.read() > 0 {
             *timer_struct.time_left.write() = timer_struct.time_left.get() - 1;
             timer_struct.update_display();
+        }
+
+        if *timer_struct.time_left.read() == 0 {
+            
+           if (*timer_context.read()).user_options.round_count > 1{
+                
+                timer_context.update(|opt| {
+                    opt.user_options.prepare_time = opt.user_options.rest_time;
+                    opt.user_options.round_count -= 1;
+                });
+                *(ended.unwrap()).write() = false;
+           }else{
+                (move|| (*timer_context.write()).view_timer = false)();
+           }
         }
     };
 
@@ -316,7 +329,7 @@ pub fn sound_timer() -> impl IntoView{
                 }>
             <ButtonTimer 
                 time_to_count=(*timer_context.read())
-                .user_options.round_time />
+                .user_options.round_time ended=Some(ended)/>
         </Show>
     }
 }
