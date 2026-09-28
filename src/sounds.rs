@@ -85,8 +85,8 @@ pub fn sound_timer_component() -> impl IntoView{
     provide_context(timer_context_signal);
 
     view! {
-        <h1>"Описание: вы выполняете действие в течение заданного времени и 
-        реагируете на звуковые сигналы, выполняя движения"</h1>
+        <p class="title-for-exs">"Задача: вы выполняете действие в течение заданного времени и 
+        реагируете на звуковые сигналы, выполняя движения"</p>
         <Show
             when=move || {  (*timer_context_signal.read()).view_timer == true }
             fallback=|| view! { <Sounds/> }
@@ -128,146 +128,163 @@ pub fn sounds() -> impl IntoView{
             .collect::<Vec<_>>());
 
         view!{
-            <div>
-                <ul>
-                    <For
-                        each=move || choices.get()
-                        key=|choices| choices.0.clone()
-                        children=move |(id, label, pushed)| {
-                            let pushed = RwSignal::from(pushed);
-                            view! {
-                                <li>
-                                    <button id=id
-                                        on:click=move |_| *pushed.write() = 
-                                        !pushed.get()
-                                    >
-                                        {pushed}{label}
-                                    </button>
-                                </li>
-                            }
+            <div class="sound-container">
+                
+                <For
+                    each=move || choices.get()
+                    key=|choices| choices.0.clone()
+                    children=move |(id, label, pushed)| {
+                        let pushed = RwSignal::from(pushed);
+                        view! {
+                            <div>
+                                <button id=id class="btn"
+                                    on:click=move |_| *pushed.write() = 
+                                    !pushed.get()
+                                >
+                                    {pushed}{label}
+                                </button>
+                            </div>
                         }
-                    />
-                </ul>
+                    }
+                />
             </div>
         }
     };
 
 
     view!{
-        
-        <div>
-            <p>"Выберите категорию сигнала:"</p>
-            <select
-                on:change:target=move |ev| {
-                    set_category.set(ev.target().value().parse().unwrap());
-                }
-                prop:value=move || category.get()
-            >
-                <option value=0>"Цвета"</option>
-                <option value=1>"Направления"</option>
-            </select>
-        </div>
-        <div>
-            <p>"Выбор звукового стимула:"</p>
-            {choice_vector}
-        </div>
-        
-        <div>
-            <p>"Время на подготовку"</p>
-            <input 
-                type="text"
-
-                prop:value=move || (*timer_context.read()).user_options.prepare_time
-                
-                on:input:target=move |ev| {
-                    (*timer_context.write()).user_options.prepare_time = 
-                    ev.target().value().parse::<i64>().unwrap_or(0);
-                }
-            />
-            <p>"Количество раундов"</p>
-            <input 
-                type="text"
-                
-                prop:value=move || (*timer_context.read()).user_options.round_count
-
-                on:input:target=move |ev| {
-                    (*timer_context.write()).user_options.round_count = 
-                    ev.target().value().parse::<i64>().unwrap_or(0);
-                }
-                
-            />
-            <p>"Длительность раунда"</p>
-            <input 
-                type="text"
-
-                prop:value=move || (*timer_context.read()).user_options.round_time
-                
-                on:input:target=move |ev| {
-                    (*timer_context.write()).user_options.round_time = 
-                    ev.target().value().parse::<i64>().unwrap_or(0);
-                }
-            />
-            <p>"Отдых между раундами"</p>
-            <input 
-                type="text"
-
-                prop:value=move || (*timer_context.read()).user_options.rest_time
-                
-                on:input:target=move |ev| {
-                    (*timer_context.write()).user_options.rest_time = 
-                    ev.target().value().parse::<i64>().unwrap_or(0);
-                }
-            />
-        </div>
-        <div>
-            <p>"C касанием:"</p>
-            <select
-                prop:value=move || (*timer_context.read()).user_options.on_touch
-
-                on:change:target=move |ev| {
-                    (*timer_context.write()).user_options.on_touch = 
-                    ev.target().value().parse().unwrap_or(0);
-                }
-            >
-                <option value=0>"Нет"</option>
-                <option value=1>"Да"</option>
-            </select>
-        </div>
-        
-        <div>
-            {move || if(*timer_context.read()).user_options.on_touch == 0 {
-                view!{<p>"Вариативность сигнала (да/нет)"</p>
+        <div class="sound-options">
+            <div class="sound-params-container">
+                <p class="section-title">Задайте звуковые параметры</p>
+                <div>
+                    <p class="option-title">"Выберите категорию сигнала:"</p>
                     <select
-                        prop:value=move || (*timer_context.read()).user_options.signal_variants
-
+                        class="select"
                         on:change:target=move |ev| {
-                            (*timer_context.write()).user_options.signal_variants= 
-                            Some(ev.target().value().parse().unwrap());
+                            set_category.set(ev.target().value().parse().unwrap());
                         }
+                        prop:value=move || category.get()
                     >
-                        <option value=0>"Нет"</option>
-                        <option value=1>"Да"</option>
+                        <option value=0>"Цвета"</option>
+                        <option value=1>"Направления"</option>
                     </select>
-                }.into_any()
-            }else{
-                view!{<div></div>}.into_any()
-            }
-        }
-        </div>
-        <div>
-            <p>"Пауза между сигналами"</p>
-                <input type="number"
-                    on:input:target=move |ev| {
-                        (*timer_context.write()).user_options.signal_freq = 
-                        ev.target().value().parse::<f64>().unwrap();
+                </div>
+                <div>
+                    <p class="option-title">"Выбор звукового стимула:"</p>
+                    {choice_vector}
+                </div>
+            </div>
+            <div class="time-params-container"> 
+                <p class="section-title">Задайте временные параметры</p>
+                <div class="time-params">
+                    <div>
+                        <p class="option-title">"Время на подготовку"</p>
+                        <input 
+                            type="text"
 
+                            prop:value=move || (*timer_context.read()).user_options.prepare_time
+                            
+                            on:input:target=move |ev| {
+                                (*timer_context.write()).user_options.prepare_time = 
+                                ev.target().value().parse::<i64>().unwrap_or(0);
+                            }
+                        />
+                    </div>
+                    <div>
+                        <p class="option-title">"Количество раундов"</p>
+                        <input 
+                            type="text"
+                            
+                            prop:value=move || (*timer_context.read()).user_options.round_count
+
+                            on:input:target=move |ev| {
+                                (*timer_context.write()).user_options.round_count = 
+                                ev.target().value().parse::<i64>().unwrap_or(0);
+                            }
+                            
+                        />
+                    </div>
+                
+                    <div>
+                        <p class="option-title">"Длительность раунда"</p>
+                        <input 
+                            type="text"
+
+                            prop:value=move || (*timer_context.read()).user_options.round_time
+                            
+                            on:input:target=move |ev| {
+                                (*timer_context.write()).user_options.round_time = 
+                                ev.target().value().parse::<i64>().unwrap_or(0);
+                            }
+                        />
+                    </div>
+                
+                    <div>
+                    <p class="option-title">"Отдых между раундами"</p>
+                    <input 
+                        type="text"
+
+                        prop:value=move || (*timer_context.read()).user_options.rest_time
+                        
+                        on:input:target=move |ev| {
+                            (*timer_context.write()).user_options.rest_time = 
+                            ev.target().value().parse::<i64>().unwrap_or(0);
+                        }
+                    />
+                    </div>
+                    
+                    <div>
+                        <p class="option-title">"Пауза между сигналами"</p>
+                            <input type="number" step="0.1" placeholder="3.0"
+                                on:input:target=move |ev| {
+                                    (*timer_context.write()).user_options.signal_freq = 
+                                    ev.target().value().parse::<f64>().unwrap();
+
+                                }
+                                prop:value=timer_context.get_untracked().user_options.signal_freq
+                            />
+                    </div>
+                                
+                    <div>
+                        <p class="option-title">"C касанием:"</p>
+                        <select
+                            class="select"
+                            prop:value=move || (*timer_context.read()).user_options.on_touch
+
+                            on:change:target=move |ev| {
+                                (*timer_context.write()).user_options.on_touch = 
+                                ev.target().value().parse().unwrap_or(0);
+                            }
+                        >
+                            <option value=0>"Нет"</option>
+                            <option value=1>"Да"</option>
+                        </select>
+                    
+                        {move || if(*timer_context.read()).user_options.on_touch == 0 {
+                            view!{<p class="option-title">"Вариативность сигнала (да/нет)"</p>
+                                <select
+                                    class="select"
+                                    prop:value=move || (*timer_context.read()).user_options.signal_variants
+
+                                    on:change:target=move |ev| {
+                                        (*timer_context.write()).user_options.signal_variants= 
+                                        Some(ev.target().value().parse().unwrap());
+                                    }
+                                >
+                                    <option value=0>"Нет"</option>
+                                    <option value=1>"Да"</option>
+                                </select>
+                            }.into_any()
+                        }else{
+                            view!{<div></div>}.into_any()
+                        }
                     }
-                    prop:value=timer_context.get_untracked().user_options.signal_freq
-                />
+                    </div>
+                </div>
+            </div>
         </div>
         <div>
-            <p>"Начать тренировку!"</p>
-            <button on:click=move |_| {
+            <button class="start-button" on:click=move |_| {
                 (*timer_context.write()).user_options.sounds = choices
                     .read()
                     .iter()
