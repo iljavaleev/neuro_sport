@@ -79,6 +79,8 @@ impl TimerStruct{
 }
 
 
+
+
 #[component]
 pub fn timer(time_to_count: i64, ended: Option<RwSignal<bool>>) -> impl IntoView{
     let timer_struct = TimerStruct::new(time_to_count);

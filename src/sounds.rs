@@ -3,18 +3,35 @@ use leptos::logging::log;
 use serde::{Deserialize, Serialize};
 
 use crate::timer::SoundTimer;
+use leptos_icons::{Icon, IconProps as _IconProps};
 
 use std::sync::LazyLock;
 
-#[derive(Debug, Clone, Hash)]
+struct IconProps(_IconProps);
+
+impl Clone for IconProps{
+    fn clone(&self) -> Self {
+        let inner = _IconProps {
+            icon: self.0.icon, 
+            style: self.0.style, 
+            width: self.0.width, 
+            height: self.0.height 
+        };
+        IconProps(inner)
+    }
+}
+
+
+#[derive(Clone)]
 struct SoundButton{
-    label: String,
+    icon: IconProps,
     path: String,
 }
 
+
 impl PartialEq for SoundButton {
     fn eq(&self, other: &SoundButton) -> bool { 
-        self.label == other.label && self.path == other.path 
+        self.icon.0.icon == other.icon.0.icon && self.path == other.path 
     }
 }
 
@@ -53,25 +70,81 @@ pub struct TimerContext {
     pub view_timer: bool,
 }
 
+
+
 static DIRECTIONS_SOUNDS: LazyLock<Vec<SoundButton>> = LazyLock::new(|| {
+    let style="width: 24px; height: 24px; color: #374151;";
     vec![
-        SoundButton{ label: "Влево".to_string(), path: "path1".to_string() },
-        SoundButton{ label: "Вправо".to_string(), path: "path2".to_string() },
-        SoundButton{ label: "Вверх".to_string(), path: "path2".to_string() },
-        SoundButton{ label: "Вниз".to_string(), path: "path2".to_string() },
+        SoundButton{
+            icon: IconProps(_IconProps{icon: icondata::BsArrowUpLeft.into(), style: style.to_string().into(), height:MaybeProp::default(), width:MaybeProp::default()}), 
+            path: "../public/directions/north_west.mp3".to_string(),
+        },
+        SoundButton{
+            icon: IconProps(_IconProps{icon: icondata::BsArrowUpRight.into(), style: style.to_string().into(), height:MaybeProp::default(), width:MaybeProp::default()}), 
+            path: "../public/directions/north_east.mp3".to_string(),
+        },
+        SoundButton{
+            icon: IconProps(_IconProps{icon: icondata::BsArrowDownRight.into(), style: style.to_string().into(), height:MaybeProp::default(), width:MaybeProp::default()}), 
+            path: "../public/directions/south_east.mp3".to_string(),
+        },
+        SoundButton{
+            icon: IconProps(_IconProps{icon: icondata::BsArrowDownLeft.into(), style: style.to_string().into(), height:MaybeProp::default(), width:MaybeProp::default()}), 
+            path: "../public/directions/south_west.mp3".to_string(),
+        },
+
+        SoundButton{
+            icon: IconProps(_IconProps{icon: icondata::BsArrowUp.into(), style: style.to_string().into(), height:MaybeProp::default(), width:MaybeProp::default()}), 
+            path: "../public/directions/north.mp3".to_string(),
+        },
+        SoundButton{
+            icon: IconProps(_IconProps{icon: icondata::BsArrowLeft .into(), style: style.to_string().into(), height:MaybeProp::default(), width:MaybeProp::default()}), 
+            path: "../public/directions/west.mp3".to_string(),
+        },
+        SoundButton{
+            icon: IconProps(_IconProps{icon: icondata::BsArrowRight.into(), style: style.to_string().into(), height:MaybeProp::default(), width:MaybeProp::default()}), 
+            path: "../public/directions/east.mp3".to_string(),
+        },
+        SoundButton{
+            icon: IconProps(_IconProps{icon: icondata::BsArrowDown.into(), style: style.to_string().into(), height:MaybeProp::default(), width:MaybeProp::default()}), 
+            path: "../public/directions/south.mp3".to_string(),
+        },
     ]
 });
 
 static COLORS_SOUNDS: LazyLock<Vec<SoundButton>> = LazyLock::new(|| {
+    let create_style = |color: &str|{
+        format!("width: 24px; height: 24px; color: {};", color)
+    };
+
     vec![
-        SoundButton{ label: "Красный".to_string(), path: "../public/colors/red.mp3".to_string() },
-        SoundButton{ label: "Синий".to_string(), path: "../public/colors/blue.mp3".to_string() },
-        SoundButton{ label: "Черный".to_string(), path: "../public/colors/black.mp3".to_string() },
-        SoundButton{ label: "Зеленый".to_string(), path: "../public/colors/green.mp3".to_string() },
-        SoundButton{ label: "Желтый".to_string(), path: "../public/colors/yellow.mp3".to_string() },
-        SoundButton{ label: "Серый".to_string(), path: "../public/colors/grey.mp3".to_string() }
+        SoundButton{
+            icon: IconProps(_IconProps{icon: icondata::BsSquareFill.into(), style: create_style("#df1010").into(), height:MaybeProp::default(), width:MaybeProp::default()}), 
+            path: "../public/colors/red.mp3".to_string(),
+        },
+        SoundButton{
+            icon: IconProps(_IconProps{icon: icondata::BsSquareFill.into(), style: create_style("#104fe2").into(), height:MaybeProp::default(), width:MaybeProp::default()}), 
+            path: "../public/colors/blue.mp3".to_string(),
+        },
+        SoundButton{
+            icon: IconProps(_IconProps{icon: icondata::BsSquareFill.into(), style: create_style("#0e0b0b").into(), height:MaybeProp::default(), width:MaybeProp::default()}), 
+            path: "../public/colors/black.mp3".to_string(),
+        },
+        SoundButton{
+            icon: IconProps(_IconProps{icon: icondata::BsSquareFill.into(), style: create_style("#0e6906").into(), height:MaybeProp::default(), width:MaybeProp::default()}), 
+            path: "../public/colors/green.mp3".to_string(),
+        },
+        SoundButton{
+            icon: IconProps(_IconProps{icon: icondata::BsSquareFill.into(), style: create_style("#d6e62f").into(), height:MaybeProp::default(), width:MaybeProp::default()}), 
+            path: "../public/colors/yellow.mp3".to_string(),
+        },
+        SoundButton{
+            icon: IconProps(_IconProps{icon: icondata::BsSquareFill.into(), style: create_style("#827777").into(), height:MaybeProp::default(), width:MaybeProp::default()}), 
+            path: "../public/colors/grey.mp3".to_string(),
+        },
     ]
 });
+
+
 
 
 #[component]
@@ -106,7 +179,7 @@ pub fn sounds() -> impl IntoView{
     let initial_choices = COLORS_SOUNDS
             .iter()
             .map(|btn| (btn.path.clone(), 
-                btn.label.clone(), 
+                btn.icon.clone(), 
                 ArcRwSignal::new(false)))
             .collect::<Vec<_>>();
     
@@ -123,25 +196,26 @@ pub fn sounds() -> impl IntoView{
         set_choices.update(move |vec| *vec = 
             init.iter()
             .map(|btn| (btn.path.clone(), 
-                btn.label.clone(), 
+                btn.icon.clone(), 
                 ArcRwSignal::new(false)))
             .collect::<Vec<_>>());
 
         view!{
             <div class="sound-container">
-                
                 <For
                     each=move || choices.get()
                     key=|choices| choices.0.clone()
-                    children=move |(id, label, pushed)| {
+                    children=move |(id, icon, pushed)| {
                         let pushed = RwSignal::from(pushed);
                         view! {
-                            <div>
-                                <button id=id class="btn"
-                                    on:click=move |_| *pushed.write() = 
-                                    !pushed.get()
+                            <div  style="all: unset; cursor: pointer; display: inline-flex; items-center: center;">
+                                <button id=id 
+                                   
+                                    class="choice-button"
+                                    class:chosen-button=move || pushed.get()
+                                    on:click=move |_| *pushed.write() = !pushed.get()
                                 >
-                                    {pushed}{label}
+                                    {Icon(icon.0)}
                                 </button>
                             </div>
                         }

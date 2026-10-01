@@ -17,6 +17,8 @@ console_log = "1.1.0"
 log = "0.4.34"
 rand = "0.10.0"
 getrandom = { version = "0.4.3", features = ["wasm_js"] }
+leptos_icons = "0.7.1"
+icondata = "0.7.0"
 
 [workspace]
 members = ["src-tauri"]
