@@ -1,37 +1,22 @@
 use leptos::{prelude::*};
-use leptos::logging::log;
 use serde::{Deserialize, Serialize};
 
 use crate::timer::SoundTimer;
-use leptos_icons::{Icon, IconProps as _IconProps};
+use leptos_icons::{Icon};
 
 use std::sync::LazyLock;
 
-struct IconProps(_IconProps);
-
-impl Clone for IconProps{
-    fn clone(&self) -> Self {
-        let inner = _IconProps {
-            icon: self.0.icon, 
-            style: self.0.style, 
-            width: self.0.width, 
-            height: self.0.height 
-        };
-        IconProps(inner)
-    }
-}
-
-
+use icondata::Icon; 
 #[derive(Clone)]
-struct SoundButton{
-    icon: IconProps,
-    path: String,
+pub struct SoundButton {
+    pub icon: &'static Icon,
+    pub style: &'static str,
+    pub path: String,
 }
-
 
 impl PartialEq for SoundButton {
     fn eq(&self, other: &SoundButton) -> bool { 
-        self.icon.0.icon == other.icon.0.icon && self.path == other.path 
+        self.icon == other.icon && self.path == other.path 
     }
 }
 
@@ -71,80 +56,30 @@ pub struct TimerContext {
 }
 
 
-
 static DIRECTIONS_SOUNDS: LazyLock<Vec<SoundButton>> = LazyLock::new(|| {
-    let style="width: 24px; height: 24px; color: #374151;";
+    let style = "width: 3em; height: 3em; color: #374151;";
     vec![
-        SoundButton{
-            icon: IconProps(_IconProps{icon: icondata::BsArrowUpLeft.into(), style: style.to_string().into(), height:MaybeProp::default(), width:MaybeProp::default()}), 
-            path: "../public/directions/north_west.mp3".to_string(),
-        },
-        SoundButton{
-            icon: IconProps(_IconProps{icon: icondata::BsArrowUpRight.into(), style: style.to_string().into(), height:MaybeProp::default(), width:MaybeProp::default()}), 
-            path: "../public/directions/north_east.mp3".to_string(),
-        },
-        SoundButton{
-            icon: IconProps(_IconProps{icon: icondata::BsArrowDownRight.into(), style: style.to_string().into(), height:MaybeProp::default(), width:MaybeProp::default()}), 
-            path: "../public/directions/south_east.mp3".to_string(),
-        },
-        SoundButton{
-            icon: IconProps(_IconProps{icon: icondata::BsArrowDownLeft.into(), style: style.to_string().into(), height:MaybeProp::default(), width:MaybeProp::default()}), 
-            path: "../public/directions/south_west.mp3".to_string(),
-        },
-
-        SoundButton{
-            icon: IconProps(_IconProps{icon: icondata::BsArrowUp.into(), style: style.to_string().into(), height:MaybeProp::default(), width:MaybeProp::default()}), 
-            path: "../public/directions/north.mp3".to_string(),
-        },
-        SoundButton{
-            icon: IconProps(_IconProps{icon: icondata::BsArrowLeft .into(), style: style.to_string().into(), height:MaybeProp::default(), width:MaybeProp::default()}), 
-            path: "../public/directions/west.mp3".to_string(),
-        },
-        SoundButton{
-            icon: IconProps(_IconProps{icon: icondata::BsArrowRight.into(), style: style.to_string().into(), height:MaybeProp::default(), width:MaybeProp::default()}), 
-            path: "../public/directions/east.mp3".to_string(),
-        },
-        SoundButton{
-            icon: IconProps(_IconProps{icon: icondata::BsArrowDown.into(), style: style.to_string().into(), height:MaybeProp::default(), width:MaybeProp::default()}), 
-            path: "../public/directions/south.mp3".to_string(),
-        },
+        SoundButton { icon: &icondata::BsArrowUpLeft, style, path: "../public/directions/north_west.mp3".to_string() },
+        SoundButton { icon: &icondata::BsArrowUpRight, style, path: "../public/directions/north_east.mp3".to_string() },
+        SoundButton { icon: &icondata::BsArrowDownRight, style, path: "../public/directions/south_east.mp3".to_string() },
+        SoundButton { icon: &icondata::BsArrowDownLeft, style, path: "../public/directions/south_west.mp3".to_string() },
+        SoundButton { icon: &icondata::BsArrowUp, style, path: "../public/directions/north.mp3".to_string() },
+        SoundButton { icon: &icondata::BsArrowLeft, style, path: "../public/directions/west.mp3".to_string() },
+        SoundButton { icon: &icondata::BsArrowRight, style, path: "../public/directions/east.mp3".to_string() },
+        SoundButton { icon: &icondata::BsArrowDown, style, path: "../public/directions/south.mp3".to_string() },
     ]
 });
 
 static COLORS_SOUNDS: LazyLock<Vec<SoundButton>> = LazyLock::new(|| {
-    let create_style = |color: &str|{
-        format!("width: 24px; height: 24px; color: {};", color)
-    };
-
     vec![
-        SoundButton{
-            icon: IconProps(_IconProps{icon: icondata::BsSquareFill.into(), style: create_style("#df1010").into(), height:MaybeProp::default(), width:MaybeProp::default()}), 
-            path: "../public/colors/red.mp3".to_string(),
-        },
-        SoundButton{
-            icon: IconProps(_IconProps{icon: icondata::BsSquareFill.into(), style: create_style("#104fe2").into(), height:MaybeProp::default(), width:MaybeProp::default()}), 
-            path: "../public/colors/blue.mp3".to_string(),
-        },
-        SoundButton{
-            icon: IconProps(_IconProps{icon: icondata::BsSquareFill.into(), style: create_style("#0e0b0b").into(), height:MaybeProp::default(), width:MaybeProp::default()}), 
-            path: "../public/colors/black.mp3".to_string(),
-        },
-        SoundButton{
-            icon: IconProps(_IconProps{icon: icondata::BsSquareFill.into(), style: create_style("#0e6906").into(), height:MaybeProp::default(), width:MaybeProp::default()}), 
-            path: "../public/colors/green.mp3".to_string(),
-        },
-        SoundButton{
-            icon: IconProps(_IconProps{icon: icondata::BsSquareFill.into(), style: create_style("#d6e62f").into(), height:MaybeProp::default(), width:MaybeProp::default()}), 
-            path: "../public/colors/yellow.mp3".to_string(),
-        },
-        SoundButton{
-            icon: IconProps(_IconProps{icon: icondata::BsSquareFill.into(), style: create_style("#827777").into(), height:MaybeProp::default(), width:MaybeProp::default()}), 
-            path: "../public/colors/grey.mp3".to_string(),
-        },
+        SoundButton { icon: &icondata::BsSquareFill, style: "width: 3em; height: 3em; color: #df1010;", path: "../public/colors/red.mp3".to_string() },
+        SoundButton { icon: &icondata::BsSquareFill, style: "width: 3em; height: 3em; color: #104fe2;", path: "../public/colors/blue.mp3".to_string() },
+        SoundButton { icon: &icondata::BsSquareFill, style: "width: 3em; height: 3em; color: #0e0b0b;", path: "../public/colors/black.mp3".to_string() },
+        SoundButton { icon: &icondata::BsSquareFill, style: "width: 3em; height: 3em; color: #0e6906;", path: "../public/colors/green.mp3".to_string() },
+        SoundButton { icon: &icondata::BsSquareFill, style: "width: 3em; height: 3em; color: #d6e62f;", path: "../with/colors/yellow.mp3".to_string() },
+        SoundButton { icon: &icondata::BsSquareFill, style: "width: 3em; height: 3em; color: #827777;", path: "../public/colors/grey.mp3".to_string() },
     ]
 });
-
-
 
 
 #[component]
@@ -179,7 +114,8 @@ pub fn sounds() -> impl IntoView{
     let initial_choices = COLORS_SOUNDS
             .iter()
             .map(|btn| (btn.path.clone(), 
-                btn.icon.clone(), 
+                btn.icon.clone(),
+                btn.style, 
                 ArcRwSignal::new(false)))
             .collect::<Vec<_>>();
     
@@ -188,15 +124,16 @@ pub fn sounds() -> impl IntoView{
 
     let choice_vector = move || {
         let init = if category.get() == 0{
-            &COLORS_SOUNDS
+            COLORS_SOUNDS.clone()
         }else{
-            &DIRECTIONS_SOUNDS
+            DIRECTIONS_SOUNDS.clone()
         };
 
         set_choices.update(move |vec| *vec = 
             init.iter()
             .map(|btn| (btn.path.clone(), 
-                btn.icon.clone(), 
+                btn.icon.clone(),
+                btn.style, 
                 ArcRwSignal::new(false)))
             .collect::<Vec<_>>());
 
@@ -204,18 +141,17 @@ pub fn sounds() -> impl IntoView{
             <div class="sound-container">
                 <For
                     each=move || choices.get()
-                    key=|choices| choices.0.clone()
-                    children=move |(id, icon, pushed)| {
+                    key=|choices| choices.clone()
+                    children=move |(id, icon, style, pushed)| {
                         let pushed = RwSignal::from(pushed);
                         view! {
-                            <div  style="all: unset; cursor: pointer; display: inline-flex; items-center: center;">
-                                <button id=id 
-                                   
+                            <div >
+                                <button id=id
                                     class="choice-button"
                                     class:chosen-button=move || pushed.get()
                                     on:click=move |_| *pushed.write() = !pushed.get()
                                 >
-                                    {Icon(icon.0)}
+                                    <Icon icon=icon style=format!("width: 3em; height: 3em; color: {}", style) />
                                 </button>
                             </div>
                         }
@@ -245,7 +181,7 @@ pub fn sounds() -> impl IntoView{
                 </div>
                 <div>
                     <p class="option-title">"Выбор звукового стимула:"</p>
-                    {choice_vector}
+                    {move || choice_vector }
                 </div>
             </div>
             <div class="time-params-container"> 
@@ -362,8 +298,8 @@ pub fn sounds() -> impl IntoView{
                 (*timer_context.write()).user_options.sounds = choices
                     .read()
                     .iter()
-                    .filter(|(_, _, signal)|{signal.read() == true})
-                    .map(|(path, _, _)| path)
+                    .filter(|(_, _, _, signal)|{signal.read() == true})
+                    .map(|(path, _, _, _)| path)
                     .cloned()
                     .collect();
                 (*timer_context.write()).view_timer = true;             
