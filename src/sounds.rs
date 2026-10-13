@@ -76,7 +76,7 @@ static COLORS_SOUNDS: LazyLock<Vec<SoundButton>> = LazyLock::new(|| {
         SoundButton { icon: &icondata::BsSquareFill, style: "width: 3em; height: 3em; color: #104fe2;", path: "../public/colors/blue.mp3".to_string() },
         SoundButton { icon: &icondata::BsSquareFill, style: "width: 3em; height: 3em; color: #0e0b0b;", path: "../public/colors/black.mp3".to_string() },
         SoundButton { icon: &icondata::BsSquareFill, style: "width: 3em; height: 3em; color: #0e6906;", path: "../public/colors/green.mp3".to_string() },
-        SoundButton { icon: &icondata::BsSquareFill, style: "width: 3em; height: 3em; color: #d6e62f;", path: "../with/colors/yellow.mp3".to_string() },
+        SoundButton { icon: &icondata::BsSquareFill, style: "width: 3em; height: 3em; color: #d6e62f;", path: "../public/colors/yellow.mp3".to_string() },
         SoundButton { icon: &icondata::BsSquareFill, style: "width: 3em; height: 3em; color: #827777;", path: "../public/colors/grey.mp3".to_string() },
     ]
 });
@@ -93,7 +93,7 @@ pub fn sound_timer_component() -> impl IntoView{
     provide_context(timer_context_signal);
 
     view! {
-        <p class="title-for-exs">"Задача: вы выполняете действие в течение заданного времени и 
+        <p class="task-banner">"Задача: вы выполняете действие в течение заданного времени и 
         реагируете на звуковые сигналы, выполняя движения"</p>
         <Show
             when=move || {  (*timer_context_signal.read()).view_timer == true }
@@ -138,17 +138,17 @@ pub fn sounds() -> impl IntoView{
             .collect::<Vec<_>>());
 
         view!{
-            <div class="sound-container">
+            <div class="choice-pill-container">
                 <For
                     each=move || choices.get()
                     key=|choices| choices.clone()
                     children=move |(id, icon, style, pushed)| {
                         let pushed = RwSignal::from(pushed);
                         view! {
-                            <div >
+                            <div>
                                 <button id=id
-                                    class="choice-button"
-                                    class:chosen-button=move || pushed.get()
+                                    class="choice-pill"
+                                    class:chosen=move || pushed.get()
                                     on:click=move |_| *pushed.write() = !pushed.get()
                                 >
                                     <Icon icon=icon style=format!("width: 3em; height: 3em; color: {}", style) />
@@ -163,11 +163,11 @@ pub fn sounds() -> impl IntoView{
 
 
     view!{
-        <div class="sound-options">
-            <div class="sound-params-container">
+        <div class="settings-grid">
+            <div class="panel-card">
                 <p class="section-title">Задайте звуковые параметры</p>
-                <div>
-                    <p class="option-title">"Выберите категорию сигнала:"</p>
+                <div class="form-group">
+                    <label>"Выберите категорию сигнала:"</label>
                     <select
                         class="select"
                         on:change:target=move |ev| {
@@ -179,18 +179,20 @@ pub fn sounds() -> impl IntoView{
                         <option value=1>"Направления"</option>
                     </select>
                 </div>
-                <div>
-                    <p class="option-title">"Выбор звукового стимула:"</p>
-                    {move || choice_vector }
+                <div class="form-group">
+                    <label>"Выбор звукового стимула:"</label>
+                    <div class="color-pill-container">
+                        {move || choice_vector}
+                    </div>
                 </div>
             </div>
-            <div class="time-params-container"> 
+            <div class="panel-card"> 
                 <p class="section-title">Задайте временные параметры</p>
-                <div class="time-params">
-                    <div>
-                        <p class="option-title">"Время на подготовку"</p>
+                <div class="input-row-three">
+                    <div class="form-group">
+                        <label>"Время на подготовку"</label>
                         <input 
-                            type="text"
+                            type="number"
 
                             prop:value=move || (*timer_context.read()).user_options.prepare_time
                             
@@ -200,10 +202,10 @@ pub fn sounds() -> impl IntoView{
                             }
                         />
                     </div>
-                    <div>
-                        <p class="option-title">"Количество раундов"</p>
+                    <div class="form-group">
+                        <label>"Количество раундов"</label>
                         <input 
-                            type="text"
+                            type="number"
                             
                             prop:value=move || (*timer_context.read()).user_options.round_count
 
@@ -214,11 +216,10 @@ pub fn sounds() -> impl IntoView{
                             
                         />
                     </div>
-                
-                    <div>
-                        <p class="option-title">"Длительность раунда"</p>
+                    <div class="form-group">
+                        <label>"Длительность раунда"</label>
                         <input 
-                            type="text"
+                            type="number"
 
                             prop:value=move || (*timer_context.read()).user_options.round_time
                             
@@ -228,23 +229,24 @@ pub fn sounds() -> impl IntoView{
                             }
                         />
                     </div>
-                
-                    <div>
-                    <p class="option-title">"Отдых между раундами"</p>
-                    <input 
-                        type="text"
+                </div>
+                <div class="input-row-two">
+                    <div class="form-group">
+                        <label>"Отдых между раундами"</label>
+                        <input 
+                            type="number"
 
-                        prop:value=move || (*timer_context.read()).user_options.rest_time
-                        
-                        on:input:target=move |ev| {
-                            (*timer_context.write()).user_options.rest_time = 
-                            ev.target().value().parse::<i64>().unwrap_or(0);
-                        }
-                    />
+                            prop:value=move || (*timer_context.read()).user_options.rest_time
+                            
+                            on:input:target=move |ev| {
+                                (*timer_context.write()).user_options.rest_time = 
+                                ev.target().value().parse::<i64>().unwrap_or(0);
+                            }
+                        />
                     </div>
                     
-                    <div>
-                        <p class="option-title">"Пауза между сигналами"</p>
+                    <div class="form-group">
+                        <label>"Пауза между сигналами"</label>
                             <input type="number" step="0.1" placeholder="3.0"
                                 on:input:target=move |ev| {
                                     (*timer_context.write()).user_options.signal_freq = 
@@ -254,9 +256,10 @@ pub fn sounds() -> impl IntoView{
                                 prop:value=timer_context.get_untracked().user_options.signal_freq
                             />
                     </div>
-                                
-                    <div>
-                        <p class="option-title">"C касанием:"</p>
+                </div>
+                <div class="input-row-two">               
+                    <div class="form-group">
+                        <label>"C касанием:"</label>
                         <select
                             class="select"
                             prop:value=move || (*timer_context.read()).user_options.on_touch
@@ -269,9 +272,11 @@ pub fn sounds() -> impl IntoView{
                             <option value=0>"Нет"</option>
                             <option value=1>"Да"</option>
                         </select>
-                    
-                        {move || if(*timer_context.read()).user_options.on_touch == 0 {
-                            view!{<p class="option-title">"Вариативность сигнала (да/нет)"</p>
+                    </div>
+                    {move || if(*timer_context.read()).user_options.on_touch == 0 {
+                        view!{
+                            <div class="form-group">
+                                <label>"Вариативность сигнала (да/нет)"</label>
                                 <select
                                     class="select"
                                     prop:value=move || (*timer_context.read()).user_options.signal_variants
@@ -284,17 +289,17 @@ pub fn sounds() -> impl IntoView{
                                     <option value=0>"Нет"</option>
                                     <option value=1>"Да"</option>
                                 </select>
-                            }.into_any()
-                        }else{
-                            view!{<div></div>}.into_any()
-                        }
+                            </div>
+                        }.into_any()
+                    }else{
+                        view!{<div></div>}.into_any()
                     }
-                    </div>
+                }
                 </div>
             </div>
         </div>
-        <div>
-            <button class="start-button" on:click=move |_| {
+        <div class="footer-actions">
+            <button class="btn-primary" on:click=move |_| {
                 (*timer_context.write()).user_options.sounds = choices
                     .read()
                     .iter()

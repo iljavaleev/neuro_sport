@@ -79,8 +79,6 @@ impl TimerStruct{
 }
 
 
-
-
 #[component]
 pub fn timer(time_to_count: i64, ended: Option<RwSignal<bool>>) -> impl IntoView{
     let timer_struct = TimerStruct::new(time_to_count);
@@ -126,18 +124,21 @@ pub fn timer(time_to_count: i64, ended: Option<RwSignal<bool>>) -> impl IntoView
     }
     
     view!{
-        {move ||  
-            {   
-                if timer_struct.time_left.get() == 0 { 
-                    try_handle.get().unwrap().clear(); 
-                    if let Some(end) = ended{
-                        *end.write() = true;
-                    }
-                };
-                view!{<div>{timer_struct.minutes.get()} : {timer_struct.seconds.get()}</div>}
-            } 
-        }
-    }.into_any()
+            <div class="timer-view-card">
+                {move ||  
+                    {   
+                        if timer_struct.time_left.get() == 0 { 
+                            try_handle.get().unwrap().clear(); 
+                            if let Some(end) = ended{
+                                *end.write() = true;
+                            }
+                        };
+                        view!{<div class="timer-countdown">{timer_struct.minutes.get()} : {timer_struct.seconds.get()}</div>}
+                    } 
+                }
+            </div>
+        }.into_any()
+        
 }
 
 
@@ -270,46 +271,64 @@ pub fn button_timer(time_to_count: i64, ended: Option<RwSignal<bool>>) -> impl I
         play_round_timer();
     });
 
-    
+    let buttons_visible = RwSignal::new(false);
     view!{
-        <div>
-            {move ||  
-                {   
+        <div class="timer-view-card">
+
+            <span class="timer-status">
+                {move || {
                     if timer_struct.time_left.get() == 0 { 
                         try_handle.get().unwrap().clear(); 
-                    };
-                    view!{
-                        <p>{timer_struct.minutes.get()} : {timer_struct.seconds.get()}</p>
+                        "Раунд завершен"
+                    } else {
+                        "Идет раунд"
                     }
-                } 
-            }
-            <button on:click=move |_| {
-                try_handle.get().unwrap().clear();
-                pause_round()
-            }>
-                "Пауза"
-            </button>
-            <button on:click=move |_| { 
-                resume_timer(); 
-                resume_round() } >
-                "Продолжить"
-            </button>
-             <button on:click=move |_| {
-                abort_round();
-                reset_timer();
-                play_round_timer();
-                resume_timer()
-            } >
-                "Заново"
-            </button>
-            <button on:click=move |_| { 
-                (*timer_context.write()).view_timer = false;
-                try_handle.get().unwrap().clear();
-                abort_round();
-            } >
-                "Вернуться к настройкам"
-            </button>
+                }}
+            </span>
 
+            <div class="timer-countdown">
+                {move || format!("{:02}:{:02}", timer_struct.minutes.get(), timer_struct.seconds.get())}
+            </div>
+            <Show when=move || buttons_visible.get() 
+                
+                fallback=move || view! { 
+                    <div class="timer-controls-row" style="grid-template-columns: 1fr;">
+                        <button class="btn-primary" on:click=move |_| { 
+                            try_handle.get().unwrap().clear();
+                            pause_round();
+                            *buttons_visible.write() = true
+                        }>
+                            "Пауза"
+                        </button>
+                    </div>
+                }>
+                
+                <div class="timer-controls-row">
+                    <button class="btn-primary" on:click=move |_| { 
+                        resume_timer(); 
+                        resume_round();
+                        *buttons_visible.write() = false 
+                    } >
+                        "Продолжить"
+                    </button>
+                    <button class="btn-secondary" on:click=move |_| {
+                        abort_round();
+                        reset_timer();
+                        play_round_timer();
+                        resume_timer();
+                        *buttons_visible.write() = false 
+                    } >
+                        "Заново"
+                    </button>
+                </div>
+                <button class="back-link" on:click=move |_| { 
+                        (*timer_context.write()).view_timer = false;
+                        try_handle.get().unwrap().clear();
+                        abort_round();
+                    } >
+                        "Вернуться к настройкам"
+                </button>
+            </Show>
         </div>
     }.into_any()
 }
