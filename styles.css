@@ -238,8 +238,6 @@ input[type="number"] {
               0 0 0 0.25rem var(--border-focus);
 }
 
-
-
 .footer-actions {
   display: flex;
   justify-content: flex-end;

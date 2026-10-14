@@ -228,6 +228,7 @@ pub fn button_timer(time_to_count: i64, ended: Option<RwSignal<bool>>) -> impl I
     
     let interval_cb = move ||{
         if *timer_struct.time_left.read() == 1 {
+            abort_round();
             play_end_sound();
         }
         if *timer_struct.time_left.read() > 0 {
