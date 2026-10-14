@@ -19,6 +19,7 @@ rand = "0.10.0"
 getrandom = { version = "0.4.3", features = ["wasm_js"] }
 leptos_icons = "0.7.1"
 icondata = "0.7.0"
+futures = "0.3"
 
 [workspace]
 members = ["src-tauri"]

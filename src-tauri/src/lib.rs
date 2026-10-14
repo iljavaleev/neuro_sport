@@ -5,7 +5,9 @@ use rodio::{Decoder, MixerDeviceSink, source::Source};
 use std::io::{self, Read};
 use std::io::Cursor;
 use std::time::{self, Duration};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+use tauri::{AppHandle, Emitter};
+
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::State;
@@ -56,6 +58,11 @@ struct AppState {
     control: Arc<TaskControl>,
 }
 
+#[derive(Serialize, Clone)]
+struct ToFrontMessage {
+    message: bool,
+}
+
 impl AppState {
     fn new() -> Self{
         Self { control: Arc::new(
@@ -74,9 +81,12 @@ pub fn get_random_delay_20(delay: f64) -> f64{
     delay + rand::random_range(-range..range)
 }
 
-
 #[tauri::command]
-async fn start_play_sound_round(state: State<'_, AppState>, options: UserOptions) -> Result<(), String> {
+async fn start_play_sound_round(
+    app: AppHandle, 
+    state: State<'_, AppState>, 
+    options: UserOptions
+) -> Result<(), String> {
     let control = state.control.clone();
     
     {
@@ -87,22 +97,23 @@ async fn start_play_sound_round(state: State<'_, AppState>, options: UserOptions
     let hndl = rodio::DeviceSinkBuilder::open_default_sink().expect("open default audio stream");
     let player = rodio::Player::connect_new(&hndl.mixer());
     
-    // если указана частота 
-    if options.on_touch == 0{
-        if options.sounds.len() == 0{
-            let error= String::from("Empty sound list");
-            error!("{}", error.clone());
-            return Err(error);
-        }
+    if options.sounds.len() == 0{
+        let error= String::from("Empty sound list");
+        error!("{}", error.clone());
+        return Err(error);
+    }
 
-        let sources: Vec<Arc<[u8]>> = options.sounds.iter().map(|path| {
+    let sources: Vec<Arc<[u8]>> = options.sounds.iter().map(|path| {
             let mut file = File::open(path).unwrap();
             let mut buffer = Vec::new();
             file.read_to_end(&mut buffer).unwrap();
             let shared_bytes: Arc<[u8]> = Arc::from(buffer);
             shared_bytes
-        }).collect();
-
+    }).collect();
+    let get_idx = ||  {rand::random_range(0..=options.sounds.len()-1)};
+    // если указана частота 
+    if options.on_touch == 0{
+        
         let get_time_to_wait: Box<dyn Fn() -> f64 + Send> = if Some(1) == options.signal_variants {
             Box::new(|| { get_random_delay_20(options.signal_freq) })
         } else {
@@ -110,8 +121,7 @@ async fn start_play_sound_round(state: State<'_, AppState>, options: UserOptions
         };
         
         let mut t = 0.5;
-        let get_idx = ||  {rand::random_range(0..=options.sounds.len()-1)};
-
+        
         loop{
             let delay = time::Duration::from_secs_f64(t);
             t = get_time_to_wait();
@@ -119,6 +129,7 @@ async fn start_play_sound_round(state: State<'_, AppState>, options: UserOptions
             
             {
                 if  control.is_running.lock().unwrap().load(Ordering::Relaxed) == false{
+                    player.sleep_until_end();
                     return Ok(());
                 }
             }
@@ -137,12 +148,36 @@ async fn start_play_sound_round(state: State<'_, AppState>, options: UserOptions
             
             player.append(source);
         }
-    }else {
-        
+    }else{
+        loop{
+            tokio::time::sleep(time::Duration::from_secs_f64(0.5)).await;
+            {
+                if  control.is_running.lock().unwrap().load(Ordering::Relaxed) == false{
+                    player.sleep_until_end();
+                    return Ok(());
+                }
+            }
+
+            let bytes_clone = sources[get_idx()].clone();
+            let cursor = Cursor::new(bytes_clone);
+            let source = Decoder::new(cursor).unwrap();
+            
+            player.append(source);
+            app.emit("backend-signal", ToFrontMessage {
+                message:true,
+            }).unwrap();
+            
+            {
+                let mut is_stopped = control.is_stopped.lock().unwrap();    
+                is_stopped.store(true, Ordering::Relaxed); 
+                // фронт рисует кнопку
+                while is_stopped.load(Ordering::Relaxed) == true {
+                    is_stopped = control.condvar.wait(is_stopped).unwrap();
+                }
+            }
+            
+        }
     }
-    
-    player.sleep_until_end();
-    Ok(())
 }
 
 
