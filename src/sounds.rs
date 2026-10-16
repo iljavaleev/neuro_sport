@@ -258,43 +258,37 @@ pub fn sounds() -> impl IntoView{
                     </div>
                 </div>
                 <div class="input-row-two">               
-                    <div class="form-group">
-                        <label>"C касанием:"</label>
-                        <select
-                            class="select"
-                            prop:value=move || (*timer_context.read()).user_options.on_touch
+                    <div class="form-group checkbox-container">
+                         <label class="checkbox-label">
+                            <input
+                                type="checkbox"
+                                class="checkbox"
+                                prop:checked=move || (*timer_context.read()).user_options.on_touch == 1
 
-                            on:change:target=move |ev| {
-                                (*timer_context.write()).user_options.on_touch = 
-                                ev.target().value().parse().unwrap_or(0);
-                            }
-                        >
-                            <option value=0>"Нет"</option>
-                            <option value=1>"Да"</option>
-                        </select>
+                                on:change:target=move |ev| {
+                                    let is_checked = ev.target().checked();
+                                    (*timer_context.write()).user_options.on_touch = if is_checked { 1 } else { 0 };
+                                }
+                            />
+                            "С касанием"
+                        </label>
                     </div>
-                    {move || if(*timer_context.read()).user_options.on_touch == 0 {
-                        view!{
-                            <div class="form-group">
-                                <label>"Вариативность сигнала (да/нет)"</label>
-                                <select
-                                    class="select"
-                                    prop:value=move || (*timer_context.read()).user_options.signal_variants
+                    <div class="form-group checkbox-container">
+                        <label class="checkbox-label">
+                            <input
+                                type="checkbox"
+                                class="checkbox"
+                                prop:checked=move || (*timer_context.read()).user_options.signal_variants == Some(1)
 
-                                    on:change:target=move |ev| {
-                                        (*timer_context.write()).user_options.signal_variants= 
-                                        Some(ev.target().value().parse().unwrap());
-                                    }
-                                >
-                                    <option value=0>"Нет"</option>
-                                    <option value=1>"Да"</option>
-                                </select>
-                            </div>
-                        }.into_any()
-                    }else{
-                        view!{<div></div>}.into_any()
-                    }
-                }
+                                on:change:target=move |ev| {
+                                    let is_checked = ev.target().checked();
+                                    (*timer_context.write()).user_options.signal_variants = 
+                                        Some(if is_checked { 1 } else { 0 });
+                                }
+                            />
+                            "Вариативность сигнала"
+                        </label>
+                    </div> 
                 </div>
             </div>
         </div>

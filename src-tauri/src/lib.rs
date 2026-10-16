@@ -52,6 +52,7 @@ struct TaskControl {
     is_running: Mutex<AtomicBool>,
     is_stopped: Mutex<AtomicBool>,
     condvar: Condvar,
+    current_round_id: Mutex<u64>, 
 }
 
 struct AppState {
@@ -70,6 +71,7 @@ impl AppState {
                 is_running: Mutex::new(AtomicBool::new(false)), 
                 is_stopped: Mutex::new(AtomicBool::new(true)), 
                 condvar: Condvar::new(),
+                current_round_id: Mutex::new(0)
             }
         ) 
     }
@@ -89,10 +91,18 @@ async fn start_play_sound_round(
 ) -> Result<(), String> {
     let control = state.control.clone();
     
-    {
-        control.is_running.lock().unwrap().store(true, Ordering::Relaxed);
-        control.is_stopped.lock().unwrap().store(false, Ordering::Relaxed);
-    }
+    let my_round_id = {
+        let mut is_running = control.is_running.lock().unwrap();
+        let mut is_stopped = control.is_stopped.lock().unwrap();
+        let mut round_id_guard = control.current_round_id.lock().unwrap();
+        
+        is_running.store(true, Ordering::Relaxed);
+        is_stopped.store(false, Ordering::Relaxed);
+        
+        // Увеличиваем ID. Этот номер будет принадлежать ТОЛЬКО этому вызову
+        *round_id_guard += 1; 
+        *round_id_guard
+    };
 
     let hndl = rodio::DeviceSinkBuilder::open_default_sink().expect("open default audio stream");
     let player = rodio::Player::connect_new(&hndl.mixer());
@@ -111,26 +121,26 @@ async fn start_play_sound_round(
             shared_bytes
     }).collect();
     let get_idx = ||  {rand::random_range(0..=options.sounds.len()-1)};
-    // если указана частота 
-    if options.on_touch == 0{
-        
-        let get_time_to_wait: Box<dyn Fn() -> f64 + Send> = if Some(1) == options.signal_variants {
+
+    let get_time_to_wait: Box<dyn Fn() -> f64 + Send> = if Some(1) == options.signal_variants {
             Box::new(|| { get_random_delay_20(options.signal_freq) })
-        } else {
-            Box::new(|| { options.signal_freq as f64 })
-        };
-        
-        let mut t = 0.5;
-        
+    } else {
+        Box::new(|| { options.signal_freq as f64 })
+    };
+
+
+    if options.on_touch == 0{
+                
+        tokio::time::sleep(time::Duration::from_secs_f64(0.5)).await;
         loop{
-            let delay = time::Duration::from_secs_f64(t);
-            t = get_time_to_wait();
-            tokio::time::sleep(delay).await;
             
             {
-                if  control.is_running.lock().unwrap().load(Ordering::Relaxed) == false{
-                    player.sleep_until_end();
-                    return Ok(());
+                let global_id = *control.current_round_id.lock().unwrap();
+                let is_running = control.is_running.lock().unwrap().load(Ordering::Relaxed);
+                
+                if !is_running || global_id != my_round_id {
+                    player.clear();
+                    return Ok(()); // Старый поток спокойно умирает здесь
                 }
             }
             
@@ -147,13 +157,27 @@ async fn start_play_sound_round(
             let source = Decoder::new(cursor).unwrap();
             
             player.append(source);
+
+            let delay = time::Duration::from_secs_f64(get_time_to_wait());
+            tokio::time::sleep(delay).await;
+
+            {
+                let global_id = *control.current_round_id.lock().unwrap();
+                if global_id != my_round_id {
+                    player.clear();
+                    return Ok(());
+                }
+            }
+
+            
         }
     }else{
+        tokio::time::sleep(time::Duration::from_secs_f64(0.5)).await;
         loop{
-            tokio::time::sleep(time::Duration::from_secs_f64(0.5)).await;
+            
             {
                 if  control.is_running.lock().unwrap().load(Ordering::Relaxed) == false{
-                    player.sleep_until_end();
+                    player.clear();
                     return Ok(());
                 }
             }
@@ -175,6 +199,9 @@ async fn start_play_sound_round(
                     is_stopped = control.condvar.wait(is_stopped).unwrap();
                 }
             }
+
+            let delay = time::Duration::from_secs_f64(get_time_to_wait());
+            tokio::time::sleep(delay).await;
             
         }
     }
