@@ -182,7 +182,7 @@ async fn start_play_sound_round(
                 is_stopped = control.condvar.wait(is_stopped).unwrap();
             }
         }
-
+        // TODO: изменить логику ожидания
         let delay = time::Duration::from_secs_f64(get_time_to_wait());
         tokio::time::sleep(delay).await;
         
