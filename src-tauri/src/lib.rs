@@ -14,6 +14,17 @@ use tauri::State;
 use std::sync::{Mutex, Arc, Condvar};
 use log::{error, info}; 
 
+use std::convert::TryFrom;
+use num_enum::TryFromPrimitive;
+
+#[derive(Debug, PartialEq, TryFromPrimitive)]
+#[repr(i64)]
+enum TouchOption {
+    Without = 0,
+    With = 1,
+}
+
+
 #[tauri::command]
 async fn play_sound(file_path: String) -> Result<(), String> {
    
@@ -99,7 +110,6 @@ async fn start_play_sound_round(
         is_running.store(true, Ordering::Relaxed);
         is_stopped.store(false, Ordering::Relaxed);
         
-        // Увеличиваем ID. Этот номер будет принадлежать ТОЛЬКО этому вызову
         *round_id_guard += 1; 
         *round_id_guard
     };
@@ -128,83 +138,63 @@ async fn start_play_sound_round(
         Box::new(|| { options.signal_freq as f64 })
     };
 
+    let Ok(touch_mode) = TouchOption::try_from_primitive(options.on_touch) else {
+        let error = format!("Invalid on_touch value: {}", options.on_touch);
+        error!("{}", error);
+        return Err(error);
+    };
+    
+    
+    tokio::time::sleep(time::Duration::from_secs_f64(0.5)).await;
 
-    if options.on_touch == 0{
-                
-        tokio::time::sleep(time::Duration::from_secs_f64(0.5)).await;
-        loop{
+    loop {
+        {
+            let global_id = *control.current_round_id.lock().unwrap();
+            let is_running = control.is_running.lock().unwrap().load(Ordering::Relaxed);
             
-            {
-                let global_id = *control.current_round_id.lock().unwrap();
-                let is_running = control.is_running.lock().unwrap().load(Ordering::Relaxed);
-                
-                if !is_running || global_id != my_round_id {
-                    player.clear();
-                    return Ok(()); // Старый поток спокойно умирает здесь
-                }
+            if !is_running || global_id != my_round_id {
+                player.clear();
+                return Ok(()); 
             }
-            
-            {
-                let mut is_stopped = control.is_stopped.lock().unwrap();
-                while is_stopped.load(Ordering::Relaxed) == true {
-                    info!("stopped");
-                    is_stopped = control.condvar.wait(is_stopped).unwrap();
-                }
-            }
-            
-            let bytes_clone = sources[get_idx()].clone();
-            let cursor = Cursor::new(bytes_clone);
-            let source = Decoder::new(cursor).unwrap();
-            
-            player.append(source);
-
-            let delay = time::Duration::from_secs_f64(get_time_to_wait());
-            tokio::time::sleep(delay).await;
-
-            {
-                let global_id = *control.current_round_id.lock().unwrap();
-                if global_id != my_round_id {
-                    player.clear();
-                    return Ok(());
-                }
-            }
-
-            
         }
-    }else{
-        tokio::time::sleep(time::Duration::from_secs_f64(0.5)).await;
-        loop{
-            
-            {
-                if  control.is_running.lock().unwrap().load(Ordering::Relaxed) == false{
-                    player.clear();
-                    return Ok(());
-                }
+        
+        if touch_mode == TouchOption::Without{
+            let mut is_stopped = control.is_stopped.lock().unwrap();
+            while is_stopped.load(Ordering::Relaxed) == true {
+                info!("stopped");
+                is_stopped = control.condvar.wait(is_stopped).unwrap();
             }
+        }
+        
+        let bytes_clone = sources[get_idx()].clone();
+        let cursor = Cursor::new(bytes_clone);
+        let source = Decoder::new(cursor).unwrap();
+        player.append(source);
 
-            let bytes_clone = sources[get_idx()].clone();
-            let cursor = Cursor::new(bytes_clone);
-            let source = Decoder::new(cursor).unwrap();
+        
+        if touch_mode == TouchOption::With {
+            app.emit("backend-signal", ToFrontMessage { message: true }).unwrap();
             
-            player.append(source);
-            app.emit("backend-signal", ToFrontMessage {
-                message:true,
-            }).unwrap();
+            let mut is_stopped = control.is_stopped.lock().unwrap();    
+            is_stopped.store(true, Ordering::Relaxed); 
             
-            {
-                let mut is_stopped = control.is_stopped.lock().unwrap();    
-                is_stopped.store(true, Ordering::Relaxed); 
-                // фронт рисует кнопку
-                while is_stopped.load(Ordering::Relaxed) == true {
-                    is_stopped = control.condvar.wait(is_stopped).unwrap();
-                }
+            while is_stopped.load(Ordering::Relaxed) == true {
+                is_stopped = control.condvar.wait(is_stopped).unwrap();
             }
+        }
 
-            let delay = time::Duration::from_secs_f64(get_time_to_wait());
-            tokio::time::sleep(delay).await;
-            
+        let delay = time::Duration::from_secs_f64(get_time_to_wait());
+        tokio::time::sleep(delay).await;
+        
+        {
+            let global_id = *control.current_round_id.lock().unwrap();
+            if global_id != my_round_id {
+                player.clear();
+                return Ok(());
+            }
         }
     }
+
 }
 
 
