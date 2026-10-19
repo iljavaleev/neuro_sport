@@ -7,7 +7,6 @@ pub struct ToFrontMessage {
     pub message: bool,
 }
 
-
 #[derive(Debug, Clone, Deserialize)] 
 pub struct UserOptions{
     pub sounds: Vec<String>,
