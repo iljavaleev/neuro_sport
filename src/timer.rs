@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use serde_wasm_bindgen::to_value;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::spawn_local;
+use futures::StreamExt; 
 
 use crate::sounds::{TimerContext, UserOptions};
 
@@ -22,6 +23,12 @@ extern "C" {
 extern "C" {
     #[wasm_bindgen(js_namespace = ["window", "__TAURI__", "core"], js_name = "invoke", catch)]
     async fn invoke_no_args(cmd: &str) -> Result<JsValue, JsValue>;
+}
+
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(js_namespace = ["__TAURI__", "event"], js_name = listen)]
+    async fn tauri_listen(event_name: &str, handler: &js_sys::Function) -> JsValue;
 }
 
 
@@ -142,6 +149,12 @@ pub fn timer(time_to_count: i64, ended: Option<RwSignal<bool>>) -> impl IntoView
 }
 
 
+#[derive(Deserialize, Debug, Clone)]
+struct ToFrontMessage {
+    message: bool,
+}
+
+
 #[component]
 pub fn button_timer(time_to_count: i64, ended: Option<RwSignal<bool>>) -> impl IntoView{
     let timer_context = 
@@ -228,6 +241,7 @@ pub fn button_timer(time_to_count: i64, ended: Option<RwSignal<bool>>) -> impl I
     
     let interval_cb = move ||{
         if *timer_struct.time_left.read() == 1 {
+            abort_round();
             play_end_sound();
         }
         if *timer_struct.time_left.read() > 0 {
@@ -271,64 +285,97 @@ pub fn button_timer(time_to_count: i64, ended: Option<RwSignal<bool>>) -> impl I
         play_round_timer();
     });
 
+    let draw_button = RwSignal::new(false);
+    Effect::new(move |_| {
+        spawn_local(async move {
+            
+            let callback = 
+                Closure::wrap(Box::new(move |_event_obj: JsValue| {
+                draw_button.set(true);
+            }) as Box<dyn FnMut(JsValue)>);
+
+            tauri_listen("backend-signal", callback.as_ref().unchecked_ref()).await;
+            callback.forget();
+        });
+    });
+
     let buttons_visible = RwSignal::new(false);
     view!{
-        <div class="timer-view-card">
+        <div class="timer-page-layout">
+            <div class="timer-view-card">
 
-            <span class="timer-status">
-                {move || {
-                    if timer_struct.time_left.get() == 0 { 
-                        try_handle.get().unwrap().clear(); 
-                        "Раунд завершен"
-                    } else {
-                        "Идет раунд"
-                    }
-                }}
-            </span>
+                <span class="timer-status">
+                    {move || {
+                        if timer_struct.time_left.get() == 0 { 
+                            try_handle.get().unwrap().clear(); 
+                            "Раунд завершен"
+                        } else {
+                            "Идет раунд"
+                        }
+                    }}
+                </span>
 
-            <div class="timer-countdown">
-                {move || format!("{:02}:{:02}", timer_struct.minutes.get(), timer_struct.seconds.get())}
-            </div>
-            <Show when=move || buttons_visible.get() 
-                
-                fallback=move || view! { 
-                    <div class="timer-controls-row" style="grid-template-columns: 1fr;">
+                <div class="timer-countdown">
+                    {move || format!("{:02}:{:02}", timer_struct.minutes.get(), timer_struct.seconds.get())}
+                </div>
+                <Show when=move || buttons_visible.get() 
+                    
+                    fallback=move || view! { 
+                        <div class="timer-controls-row" style="grid-template-columns: 1fr;">
+                            <button class="btn-primary" on:click=move |_| { 
+                                try_handle.get().unwrap().clear();
+                                pause_round();
+                                *buttons_visible.write() = true
+                            }>
+                                "Пауза"
+                            </button>
+                        </div>
+                    }>
+                    
+                    <div class="timer-controls-row">
                         <button class="btn-primary" on:click=move |_| { 
-                            try_handle.get().unwrap().clear();
-                            pause_round();
-                            *buttons_visible.write() = true
-                        }>
-                            "Пауза"
+                            resume_timer(); 
+                            resume_round();
+                            *buttons_visible.write() = false 
+                        } >
+                            "Продолжить"
+                        </button>
+                        <button class="btn-secondary" on:click=move |_| {
+                            abort_round();
+                            reset_timer();
+                            play_round_timer();
+                            resume_timer();
+                            *buttons_visible.write() = false 
+                        } >
+                            "Заново"
                         </button>
                     </div>
-                }>
-                
-                <div class="timer-controls-row">
-                    <button class="btn-primary" on:click=move |_| { 
-                        resume_timer(); 
-                        resume_round();
-                        *buttons_visible.write() = false 
-                    } >
-                        "Продолжить"
+                    <button class="back-link" on:click=move |_| { 
+                            (*timer_context.write()).view_timer = false;
+                            try_handle.get().unwrap().clear();
+                            abort_round();
+                        } >
+                            "Вернуться к настройкам"
                     </button>
-                    <button class="btn-secondary" on:click=move |_| {
-                        abort_round();
-                        reset_timer();
-                        play_round_timer();
-                        resume_timer();
-                        *buttons_visible.write() = false 
-                    } >
-                        "Заново"
-                    </button>
-                </div>
-                <button class="back-link" on:click=move |_| { 
-                        (*timer_context.write()).view_timer = false;
-                        try_handle.get().unwrap().clear();
-                        abort_round();
-                    } >
-                        "Вернуться к настройкам"
-                </button>
-            </Show>
+                </Show>
+            </div>
+            <div class="action-wrapper">
+                {move || if draw_button.get() {
+                    Some(view! {
+                        <button 
+                            class="circle-pulse-btn"
+                            on:click=move |_| { 
+                                resume_round();
+                                draw_button.set(false)
+                                }
+                        >
+                            "GO"
+                        </button>
+                    })
+                } else {
+                    None
+                }}
+            </div>
         </div>
     }.into_any()
 }
