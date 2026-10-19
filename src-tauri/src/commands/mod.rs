@@ -1,4 +1,5 @@
 pub mod sound;
+pub mod dbase;
 
 pub use sound::{start_play_sound_round, 
     play_sound, 
