@@ -103,8 +103,8 @@ async fn start_play_sound_round(
     let control = state.control.clone();
     
     let my_round_id = {
-        let mut is_running = control.is_running.lock().unwrap();
-        let mut is_stopped = control.is_stopped.lock().unwrap();
+        let is_running = control.is_running.lock().unwrap();
+        let is_stopped = control.is_stopped.lock().unwrap();
         let mut round_id_guard = control.current_round_id.lock().unwrap();
         
         is_running.store(true, Ordering::Relaxed);
@@ -144,10 +144,10 @@ async fn start_play_sound_round(
         return Err(error);
     };
     
-    
     tokio::time::sleep(time::Duration::from_secs_f64(0.5)).await;
 
     loop {
+        
         {
             let global_id = *control.current_round_id.lock().unwrap();
             let is_running = control.is_running.lock().unwrap().load(Ordering::Relaxed);
@@ -174,25 +174,63 @@ async fn start_play_sound_round(
         
         if touch_mode == TouchOption::With {
             app.emit("backend-signal", ToFrontMessage { message: true }).unwrap();
-            
-            let mut is_stopped = control.is_stopped.lock().unwrap();    
-            is_stopped.store(true, Ordering::Relaxed); 
-            
-            while is_stopped.load(Ordering::Relaxed) == true {
-                is_stopped = control.condvar.wait(is_stopped).unwrap();
+            let t = time::Instant::now();
+            {
+                let mut is_stopped = control.is_stopped.lock().unwrap();    
+                is_stopped.store(true, Ordering::Relaxed); 
+                
+                while is_stopped.load(Ordering::Relaxed) == true {
+                    is_stopped = control.condvar.wait(is_stopped).unwrap();
+                }
+                let delta_t = t.elapsed();
+                info!("Time for push: {}", delta_t.as_secs_f64());
             }
         }
-        // TODO: изменить логику ожидания
-        let delay = time::Duration::from_secs_f64(get_time_to_wait());
-        tokio::time::sleep(delay).await;
         
-        {
-            let global_id = *control.current_round_id.lock().unwrap();
-            if global_id != my_round_id {
-                player.clear();
-                return Ok(());
+        let total_delay_secs = get_time_to_wait();
+        let total_duration = time::Duration::from_secs_f64(total_delay_secs);
+
+        let mut accumulated_time = time::Duration::ZERO;
+        let mut last_tick = std::time::Instant::now();
+
+        let mut ticker = tokio::time::interval(time::Duration::from_millis(50));
+        // delay loop
+        loop {
+            ticker.tick().await;
+            {
+                let global_id = *control.current_round_id.lock().unwrap();
+                let is_running = control.is_running.lock().unwrap().load(Ordering::Relaxed);
+
+                if !is_running || global_id != my_round_id {
+                    player.clear();
+                    return Ok(());
+                }
             }
+
+            {
+                let mut is_stopped = control.is_stopped.lock().unwrap();
+                if is_stopped.load(Ordering::Relaxed) == true {
+                    info!("Timer paused. Inner loop.");
+                    
+                    while is_stopped.load(Ordering::Relaxed) == true {
+                        is_stopped = control.condvar.wait(is_stopped).unwrap();
+                    }
+                    
+                    last_tick = std::time::Instant::now();
+                    continue;
+                }
+            }
+            
+            let now = std::time::Instant::now();
+            accumulated_time += now.duration_since(last_tick);
+            last_tick = now;
+
+            if accumulated_time >= total_duration {
+                break;
+            }
+
         }
+        
     }
 
 }
@@ -217,9 +255,9 @@ async fn pause_play_sound_round(state: State<'_, AppState>) -> Result<(), String
 async fn resume_play_sound_round(state: State<'_, AppState>) -> Result<(), String> {
    {
         let is_stopped = state.control.is_stopped.lock().unwrap();
-        (*is_stopped).store(false, Ordering::SeqCst);
+        (*is_stopped).store(false, Ordering::Relaxed);
     }
-   state.control.condvar.notify_one();
+   state.control.condvar.notify_all();
    Ok(())
 }
 
