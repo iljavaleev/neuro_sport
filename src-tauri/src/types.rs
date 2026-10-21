@@ -1,7 +1,7 @@
 use serde::{Serialize, Deserialize};
 use num_enum::TryFromPrimitive;
 
-use chrono::NaiveDate;
+use chrono::{NaiveDate, NaiveDateTime};
 use uuid::Uuid;
 
 
@@ -30,7 +30,6 @@ pub enum TouchOption {
     With = 1,
 }
 
-
 #[derive(Debug, Serialize, Deserialize,)]
 pub struct User {
     pub id: Uuid,
@@ -38,9 +37,26 @@ pub struct User {
     pub password_hash: String,
     pub date_of_birth: NaiveDate,
     pub sex: String,
+    pub created_at: NaiveDateTime,
 }
 
-// 1. Специфичные метрики для динамического таймера (можете расширять как хотите)
+#[derive(Debug, Serialize, Deserialize,)]
+pub struct Session {
+    pub id: Uuid,
+    pub user_id: i128,
+    pub exercise_id: i128,
+    pub date_of_birth: NaiveDateTime,
+    pub created_at: NaiveDateTime,
+}
+
+#[derive(Debug, Serialize, Deserialize,)]
+pub struct Exercise {
+    pub id: Uuid,
+    pub name: String,
+    pub description: String,
+    pub created_at: NaiveDateTime,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AgilityMetrics {
     pub missed_signals: i64,
@@ -48,13 +64,12 @@ pub struct AgilityMetrics {
     pub reaction_history: Vec<f64>, // Массив времени каждого касания
 }
 
-// 2. Основная структура для отображения и маппинга из БД
+
 #[derive(Debug, Serialize, Deserialize, sqlx::FromRow, Clone)]
 pub struct ExerciseStat {
     pub id: i64,
     pub session_id: i64,
     pub duration_seconds: f64,
     pub completed_rounds: i64,
-    // Использование sqlx::types::Json автоматически конвертирует TEXT из SQLite в JSON-объект в Rust
-    pub dynamic_metrics: sqlx::types::Json<serde_json::Value>, 
+    pub additional_metrics: Option<sqlx::types::Json<serde_json::Value>>, 
 }

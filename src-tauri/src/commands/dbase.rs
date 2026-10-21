@@ -1,5 +1,7 @@
 use tauri::State;
 use crate::state::AppState;
+use crate::types::{ExerciseStat};
+
 
 #[tauri::command]
 pub async fn save_workout_results(
@@ -14,7 +16,7 @@ pub async fn save_workout_results(
 
     sqlx::query!(
         r#"
-        INSERT INTO exercise_stats (session_id, duration_seconds, completed_rounds, dynamic_metrics)
+        INSERT INTO exercise_stats (session_id, duration_seconds, completed_rounds, additional_metrics)
         VALUES (?, ?, ?, ?)
         "#,
         session_id,
@@ -39,9 +41,14 @@ pub async fn get_workout_history_by_user(
     let history = sqlx::query_as!(
         ExerciseStat,
         r#"
-        SELECT es.id, es.session_id, es.duration_seconds, es.completed_rounds, es.dynamic_metrics
+        SELECT 
+            es.id, 
+            es.session_id, 
+            es.duration_seconds, 
+            es.completed_rounds, 
+            es.additional_metrics as "additional_metrics: sqlx::types::Json<serde_json::Value>"
         FROM exercise_stats es
-        JOIN sessions s ON es.session_id = s.id
+        JOIN session s ON es.session_id = s.id
         WHERE s.user_id = ?
         ORDER BY s.session_date DESC
         "#,
