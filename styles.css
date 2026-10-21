@@ -77,7 +77,8 @@ body {
 
 .nav-links {
   display: flex;
-  gap: 1rem;                 
+  gap: 1rem;
+  flex-grow: 1;                 
 }
 
 .nav-link {
@@ -86,6 +87,10 @@ body {
   font-size: 0.875rem;       
   font-weight: 500;
   transition: color 0.2s ease;
+}
+
+.ms-auto {
+  margin-left: auto !important;
 }
 
 .nav-link.active {

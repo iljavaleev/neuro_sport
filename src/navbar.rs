@@ -19,6 +19,20 @@ pub fn navbar() -> impl IntoView{
                     <a href="/sound" class="nav-link">
                         "Статистика"
                     </a>
+                    
+                    
+
+                    <a href="/login" class="nav-link ms-auto">
+                        "Вход"
+                    </a>
+
+                    <a href="/logout" class="nav-link">
+                        "Выход"
+                    </a>
+
+                    <a href="/register" class="nav-link">
+                        "Регистарция"
+                    </a>
                 </div>
             
             </div>
