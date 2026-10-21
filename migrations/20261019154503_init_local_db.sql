@@ -1,11 +1,10 @@
--- Add migration script here
 CREATE TABLE user (
     id TEXT PRIMARY KEY NOT NULL,
     email TEXT NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
     date_of_birth TEXT NOT NULL,
     sex TEXT NOT NULL,
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE session (
@@ -13,8 +12,8 @@ CREATE TABLE session (
     user_id INTEGER NOT NULL,
     exercise_id INTEGER NOT NULL,
     session_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (exercise_id) REFERENCES exercises(id) ON DELETE CASCADE
+    FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE,
+    FOREIGN KEY (exercise_id) REFERENCES exercise(id) ON DELETE CASCADE
 );
 
 CREATE TABLE exercise (
@@ -31,5 +30,5 @@ CREATE TABLE exercise_stats (
     completed_rounds INTEGER NOT NULL,
     -- JSON-строка
     additional_metrics TEXT, 
-    FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+    FOREIGN KEY (session_id) REFERENCES session(id) ON DELETE CASCADE
 );
