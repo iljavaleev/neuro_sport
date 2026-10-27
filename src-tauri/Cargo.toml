@@ -5,12 +5,7 @@ description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [lib]
-# The `_lib` suffix may seem redundant but it is necessary
-# to make the lib name unique and wouldn't conflict with the bin name.
-# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
 name = "neuro_sport_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
@@ -18,25 +13,33 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = ["config-toml"] }
 
 [dependencies]
+# --- Tauri Core & Plugins ---
 tauri = { version = "2", features = ["config-toml"] }
 tauri-plugin-opener = "2"
 tauri-plugin-log = "2.0.0" 
+
+# --- Serialization & Logging ---
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-rodio = "0.22" 
-rand = "0.10.0"
-tokio = { version = "1.53.1", features = ["full"] }
 log = "^0.4"
+
+# --- Math, Utilities & System Logic ---
 num_enum = "0.7"
+chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1.13", features = ["v4", "serde"] }
 
-sqlx = { version = "0.8", features = ["runtime-tokio", "tls-rustls", "sqlite", "chrono", "uuid", "json"] }
-chrono = { version = "0.4", features = ["serde"] }
+# --- Cryptography & Randomness (Upgraded for SQLx 0.9!) ---
+# Rand 0.10 uses "sys_rng" instead of "os_rng" or "getrandom"
+rand = { version = "0.10.0", features = ["sys_rng"] }
+argon2 = { version = "0.6.0" }
 
+# --- Database Async Engine (Upgraded to 0.9!) ---
+tokio = { version = "1.53.1", features = ["full"] } 
+sqlx = { version = "0.9", features = ["runtime-tokio", "tls-rustls", "sqlite", "chrono", "uuid", "json"] }
 
+# --- Audio Subsystem ---
+rodio = "0.22" 
 
-
-# Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
 [profile.release]
 codegen-units = 1
 lto = true

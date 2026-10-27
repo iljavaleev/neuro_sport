@@ -16,7 +16,10 @@ console_error_panic_hook = "0.1.7"
 console_log = "1.1.0"
 log = "0.4.34"
 rand = "0.10.0"
+
 getrandom = { version = "0.4.3", features = ["wasm_js"] }
+getrandom_v2 = { package = "getrandom", version = "0.2", features = ["js"] }
+
 leptos_icons = "0.7.1"
 icondata = "0.7.0"
 futures = "0.3"
