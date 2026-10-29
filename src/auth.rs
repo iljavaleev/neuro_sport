@@ -156,123 +156,138 @@ pub fn Register() -> impl IntoView{
     let passwords = RwSignal::new(Passw::default());
     let err_str =  RwSignal::new(String::new());
     let navigate = use_navigate();
-
+    let view_nav = navigate.clone();
     let exit_button = move |_| {
         
         if passwords.with(|e| e.pass != e.pass2){
-            *err_str.write() = "Пароли не совпадают".to_string();
+            err_str.set("Пароли не совпадают".to_string());
             return;
         }
         user_info.update(|u| 
             u.password = passwords.with(|p| p.pass.clone())
         );
 
-        user_info.with(|u|{
-            if let Err(e) = u.check(){
-                 *err_str.write() = e;
+        let mut has_error = false;
+        user_info.with(|u| {
+            if let Err(e) = u.check() {
+                err_str.set(e);
+                has_error = true;
             }
-            return;
         });
+
+        if has_error {
+            return;
+        }
         navigate("/", NavigateOptions::default());
     };
 
     view!{
-        <div class="panel-card">
-            <div class="form-group">
-                <label>"Адрес эл.почты"</label>
-                <input 
-                    type="text"
+        <main class="main-content auth-page">
+        <div class="auth-top-wrapper">
+            <div class="panel-card auth-card" style="width: 100%; max-width: 460px;">
+                <h2>"Регистрация"</h2>
+                <div class="form-group">
+                    <label>"Адрес эл.почты"</label>
+                    <input 
+                        type="text"
 
-                    prop:value=move || (*user_info.read()).email.clone()
-                    
-                    on:input:target=move |ev| {
-                        (*user_info.write()).email = 
-                        ev.target().value().parse().unwrap();
-                    }
-                />
-            </div>
-            <div class="form-group">
-                <label>"Пароль"</label>
-                <input 
-                    type="text"
-
-                    prop:value=move || (*passwords.read()).pass.clone()
-                    
-                    on:input:target=move |ev| {
-                        (*passwords.write()).pass = 
-                        ev.target().value().parse().unwrap();
-                    }
-                />
-            </div>
-            <div class="form-group">
-                <label>"Повторите пароль"</label>
-                <input 
-                    type="text"
-
-                    prop:value=move || (*passwords.read()).pass2.clone()
-                    
-                    on:input:target=move |ev| {
-                        (*passwords.write()).pass2 = 
-                        ev.target().value().parse().unwrap();
-                    }
-                />
-            </div>
-            <div class="form-group">
-                <label>"Дата рождения"</label>
-                <input 
-                    type="date"
-
-                    prop:value=move || {
-                        user_info.with(|info| {
-                            info.date_of_birth
-                                .map(|date| date.to_string()) 
-                                .unwrap_or_default() 
-                        })
-                    }
-                    
-                    on:input:target=move |ev| {
-                        let val: String =  ev.target().value().parse().unwrap();
+                        prop:value=move || (*user_info.read()).email.clone()
                         
-                        user_info.update(|info| {
-                            info.date_of_birth = if val.is_empty() {None} 
-                                else 
-                            {NaiveDate::parse_from_str(&val, "%Y-%m-%d").ok()};
-                        });
-                    }
-                />
-            </div>
-            <div class="form-group">
-                <label>"Пол"</label>
-                <select
-                        class="select"
-                        on:change:target=move |ev| {
-                            (*user_info.write()).sex = ev.target().value().parse().unwrap()
+                        on:input:target=move |ev| {
+                            (*user_info.write()).email = 
+                            ev.target().value().parse().unwrap();
                         }
-                        prop:value=move || (*user_info.read()).sex.clone()
-                    >
-                        <option value="M">"М"</option>
-                        <option value="W">"Ж"</option>
-                </select>
-            </div>
-            <div>
-                {move || {
-                    let error = err_str.get();
-                    (!error.is_empty()).then(|| view! { 
-                        <div class="text-red-500 font-bold bg-red-100 p-2 rounded">
-                            {error}
-                        </div> 
-                    })
-                }}
-                <button class="btn-primary" on:click=exit_button>
-                    <p>"Завершить"</p>
-                </button>
-                <div class="nav-links">
-                    <a href="/login" class="nav-link active">
-                        "назад"
-                    </a>
+                    />
                 </div>
-            </div>
+                <div class="form-group">
+                    <label>"Пароль"</label>
+                    <input 
+                        type="password"
+
+                        prop:value=move || (*passwords.read()).pass.clone()
+                        
+                        on:input:target=move |ev| {
+                            (*passwords.write()).pass = 
+                            ev.target().value().parse().unwrap();
+                        }
+                    />
+                </div>
+                <div class="form-group">
+                    <label>"Повторите пароль"</label>
+                    <input 
+                        type="password"
+
+                        prop:value=move || (*passwords.read()).pass2.clone()
+                        
+                        on:input:target=move |ev| {
+                            (*passwords.write()).pass2 = 
+                            ev.target().value().parse().unwrap();
+                        }
+                    />
+                </div>
+
+                <div class="input-row-two">
+                    <div class="form-group">
+                        <label>"Дата рождения"</label>
+                        <input 
+                            type="date"
+
+                            prop:value=move || {
+                                user_info.with(|info| {
+                                    info.date_of_birth
+                                        .map(|date| date.to_string()) 
+                                        .unwrap_or_default() 
+                                })
+                            }
+                            
+                            on:input:target=move |ev| {
+                                let val: String =  ev.target().value().parse().unwrap();
+                                
+                                user_info.update(|info| {
+                                    info.date_of_birth = if val.is_empty() {None} 
+                                        else 
+                                    {NaiveDate::parse_from_str(&val, "%Y-%m-%d").ok()};
+                                });
+                            }
+                        />
+                    </div>
+                    <div class="form-group">
+                        <label>"Пол"</label>
+                        <select
+                                class="select"
+                                on:change:target=move |ev| {
+                                    (*user_info.write()).sex = ev.target().value().parse().unwrap()
+                                }
+                                prop:value=move || (*user_info.read()).sex.clone()
+                            >
+                                <option value="M">"М"</option>
+                                <option value="W">"Ж"</option>
+                        </select>
+                    </div>
+                </div>
+                    <div>
+                        {move || {
+                            let error = err_str.get();
+                            (!error.is_empty()).then(|| view! { 
+                                <div class="task-banner" style="margin-bottom: 1rem; border-color: rgba(239, 68, 68, 0.4); background-color: rgba(239, 68, 68, 0.1); color: #f87171;">
+                                    <strong>"Ошибка: "</strong> {error}
+                                </div> 
+                            })
+                        }}
+                        <div class="form-footer-actions">
+                            <button type="submit" class="btn-primary" on:click=exit_button>
+                                "Завершить"
+                            </button>
+                            
+                            <button class="action-link" on:click=move |_| view_nav("/login", NavigateOptions::default())>
+                                "назад"
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            
         </div>
+        </main>
     }
 
 }
@@ -297,7 +312,8 @@ pub fn CheckEmailView(
     user_exists: RwSignal<bool>,
     ) -> impl IntoView{
     let LoginContext{db_user, err_str} = use_context::<LoginContext>().expect("Context to be present");
-    
+    let navigate = use_navigate();
+
     let continue_btn = move |_| {
         let email = db_user.with(|u| u.email.clone());
         let user_exists = user_exists;
@@ -305,9 +321,7 @@ pub fn CheckEmailView(
 
         
         spawn_local(async move {
-            let payload = CheckUserEmailArg {
-                email: email, 
-            };
+            let payload = CheckUserEmailArg { email };
             let args = to_value(&payload).unwrap();
             
             match invoke("check_user_exists", args).await{
@@ -319,46 +333,52 @@ pub fn CheckEmailView(
                     user_exists.set(true)
                 },
                 Err(js_error) => {
-                    *err_str.write()  = serde_wasm_bindgen::from_value(js_error)
-                        .unwrap_or_else(|_| "Unknown backend error".to_string());
+                    let err_msg: String = from_value(js_error)
+                            .unwrap_or_else(|_| "Unknown backend error".to_string());
+                        err_str.set(err_msg);
                 }
             }
         });
     };
 
     view!{
-        <div class="panel-card">
-            <div class="form-group">
-                <label>"Введите адрес эл.почты"</label>
-                <input 
-                    type="text"
+        <main class="main-content auth-page">
+        <div class="auth-top-wrapper">
 
-                    prop:value=move || db_user.with(|u| u.email.clone())
-                    
-                    on:input:target=move |ev| {
-                        db_user.update(|u| u.email = ev.target().value());
-                    }
-                />
-            </div>
-            <div>
-                {move || {
-                    let error = err_str.get();
-                    (!error.is_empty()).then(|| view! { 
-                        <div class="text-red-500 font-bold bg-red-100 p-2 rounded">
-                            {error}
-                        </div> 
-                    })
-                }}
-                <button class="btn-primary" on:click=continue_btn>
-                    <p>"Продолжить"</p>
+            <div class="panel-card auth-card" style="width: 100%; max-width: 440px;">
+                <h2>"Вход в систему"</h2>
+                <div class="form-group">
+                    <label>"Введите адрес эл.почты"</label>
+                    <input 
+                        type="email"
+                        placeholder="name@example.com"
+
+                        prop:value=move || db_user.with(|u| u.email.clone())
+                        
+                        on:input:target=move |ev| {
+                            db_user.update(|u| u.email = ev.target().value());
+                        }
+                    />
+                </div>
+                <div>
+                    {move || {
+                        let error = err_str.get();
+                        (!error.is_empty()).then(|| view! { 
+                           <div class="task-banner" style="margin-bottom: 1rem; border-color: rgba(239, 68, 68, 0.4); background-color: rgba(239, 68, 68, 0.1); color: #f87171;">
+                                    <strong>"Ошибка: "</strong> {error}
+                            </div> 
+                        })
+                    }}
+                    <button class="btn-primary" on:click=continue_btn>
+                        <p>"Продолжить"</p>
+                    </button>
+                </div>
+                <button class="action-link" on:click=move |_| navigate("/register", NavigateOptions::default())>
+                    "создать аккаунт?"
                 </button>
             </div>
-            <div class="nav-links">
-                <a href="/register" class="nav-link active">
-                    "создать аккаунт?"
-                </a>
-            </div>
         </div>
+        </main>
     }
     
 }
