@@ -1,6 +1,9 @@
 use tauri::State;
 use crate::state::AppState;
-use crate::types::{ExerciseStat};
+use crate::types::{ExerciseStat, User};
+
+
+
 
 
 #[tauri::command]

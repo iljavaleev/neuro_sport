@@ -40,6 +40,22 @@ pub struct User {
     pub created_at: NaiveDateTime,
 }
 
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct FrontendUser {
+    pub email: String,
+    pub password: String,
+    pub date_of_birth: NaiveDate,
+    pub sex: String,
+}
+
+#[derive(Deserialize, Debug, Serialize)]
+pub struct UserResponse {
+    pub id: String, 
+    pub email: String,
+}
+
+
 #[derive(Debug, Serialize, Deserialize,)]
 pub struct Session {
     pub id: Uuid,

@@ -12,7 +12,9 @@ use commands::{
     start_play_sound_round, 
     abort_play_sound_round, 
     pause_play_sound_round, 
-    resume_play_sound_round
+    resume_play_sound_round, 
+    create_user, 
+    check_user_exists
 };
 
 
@@ -26,7 +28,10 @@ pub fn run() {
             start_play_sound_round, 
             abort_play_sound_round, 
             pause_play_sound_round,
-            resume_play_sound_round
+            resume_play_sound_round,
+            create_user,
+            check_user_exists
+
         ])
         .setup(|app| {
             let app_data_dir = app.path().app_data_dir()

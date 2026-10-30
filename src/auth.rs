@@ -92,7 +92,7 @@ pub mod Checker{
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct User {
     pub email: String,
     pub password: String,
@@ -149,14 +149,20 @@ pub struct Passw{
     pub pass2: String
 }
 
+#[derive(Serialize)]
+struct CreateUserArg {
+    user: User, 
+}
 
 #[component]
 pub fn Register() -> impl IntoView{
     let user_info = RwSignal::new(User::new());
     let passwords = RwSignal::new(Passw::default());
     let err_str =  RwSignal::new(String::new());
+
     let navigate = use_navigate();
     let view_nav = navigate.clone();
+    
     let exit_button = move |_| {
         
         if passwords.with(|e| e.pass != e.pass2){
@@ -178,7 +184,24 @@ pub fn Register() -> impl IntoView{
         if has_error {
             return;
         }
-        navigate("/", NavigateOptions::default());
+        let navigate = use_navigate();
+
+        spawn_local(async move {
+            let payload = CreateUserArg { user: user_info.get() };
+            let args = to_value(&payload).unwrap();
+            
+            if let Err(err) = invoke("create_user", args).await{
+            {
+                let err_msg: String = from_value(err)
+                        .unwrap_or_else(|_| "Unknown backend error".to_string());
+                error!("{}", err_msg);
+                err_str.set(err_msg);
+            }}else{
+                navigate("/", NavigateOptions::default());
+            }
+        });
+
+        
     };
 
     view!{
@@ -302,7 +325,7 @@ struct CheckUserEmailArg {
 
 #[derive(Deserialize, Debug, Default)]
 pub struct UserResponse {
-    pub id: u64, 
+    pub id: String, 
     pub email: String,
 }
 
@@ -335,7 +358,7 @@ pub fn CheckEmailView(
                 Err(js_error) => {
                     let err_msg: String = from_value(js_error)
                             .unwrap_or_else(|_| "Unknown backend error".to_string());
-                        err_str.set(err_msg);
+                    err_str.set(err_msg);
                 }
             }
         });
@@ -360,24 +383,26 @@ pub fn CheckEmailView(
                         }
                     />
                 </div>
-                <div>
-                    {move || {
-                        let error = err_str.get();
-                        (!error.is_empty()).then(|| view! { 
-                           <div class="task-banner" style="margin-bottom: 1rem; border-color: rgba(239, 68, 68, 0.4); background-color: rgba(239, 68, 68, 0.1); color: #f87171;">
-                                    <strong>"Ошибка: "</strong> {error}
-                            </div> 
-                        })
-                    }}
+            
+                {move || {
+                    let error = err_str.get();
+                    (!error.is_empty()).then(|| view! { 
+                        <div class="task-banner" style="margin-bottom: 1rem; border-color: rgba(239, 68, 68, 0.4); background-color: rgba(239, 68, 68, 0.1); color: #f87171;">
+                                <strong>"Ошибка: "</strong> {error}
+                        </div> 
+                    })
+                }}
+                <div class="form-footer-actions">
                     <button class="btn-primary" on:click=continue_btn>
-                        <p>"Продолжить"</p>
+                        "Продолжить"
+                    </button>
+                    
+                    <button class="action-link" on:click=move |_| navigate("/register", NavigateOptions::default())>
+                        "создать аккаунт?"
                     </button>
                 </div>
-                <button class="action-link" on:click=move |_| navigate("/register", NavigateOptions::default())>
-                    "создать аккаунт?"
-                </button>
+                </div>
             </div>
-        </div>
         </main>
     }
     
@@ -387,9 +412,11 @@ pub fn CheckEmailView(
 
 #[derive(Serialize)]
 struct CheckUserPasswArg {
-    id: u64,
+    id: String,
     passwd: String, 
 }
+
+// написать хэндлеры
 
 #[component]
 pub fn UpdatePasswDbView(
@@ -400,7 +427,7 @@ pub fn UpdatePasswDbView(
 
 
     let submit_update_pass = move |_| {
-        let id = db_user.with(|u| u.id);
+        let id = db_user.with(|u| u.id.clone());
         let err_str = err_str;
         let passwd = new_pass.with(|p| p.pass.clone());
         
@@ -431,68 +458,71 @@ pub fn UpdatePasswDbView(
     };
 
     view! {
-        <div>
-            <div class="form-group">
-                <label>"Введите новый пароль"</label>
-                 <input 
-                    type="text"
+        <main class="main-content auth-page">
+        <div class="auth-top-wrapper">
+            <div class="panel-card auth-card" style="width: 100%; max-width: 440px;">
+                <h2>"Сброс пароля"</h2>
+                <div class="form-group" style="margin-bottom: 1rem;">
+                    <label class="form-label">"Введите новый пароль"</label>
+                    <input 
+                        type="text"
 
-                    prop:value=move || (*new_pass.read()).pass.clone()
+                        prop:value=move || (*new_pass.read()).pass.clone()
+                        
+                        on:input:target=move |ev| {
+                            new_pass.update(|p| p.pass = ev.target().value());
+                        }
+                    />
+                </div>
+                <div class="form-group" style="margin-bottom: 1.5rem;">
+                    <label class="form-label">"Подтвердите пароль"</label>
+                    <input 
+                        type="text"
+
+                        prop:value=move || (*new_pass.read()).pass2.clone()
+                        
+                        on:input:target=move |ev| {
+                            new_pass.update(|p| p.pass2 = ev.target().value());
+                        }
+                    />
+                </div>
+                <div class="form-footer-actions">
+                    {move || {
+                        let error = err_str.get();
+                        (!error.is_empty()).then(|| view! { 
+                            <div class="task-banner" style="margin-bottom: 1rem; border-color: rgba(239, 68, 68, 0.4); background-color: rgba(239, 68, 68, 0.1); color: #f87171; width: 100%; text-align: center;">
+                                <strong>"Ошибка: "</strong> {error}
+                            </div> 
+                        })
+                    }}
                     
-                    on:input:target=move |ev| {
-                        new_pass.update(|p| p.pass = ev.target().value());
-                    }
-                />
-            </div>
-            <div class="form-group">
-                <label>"Подтвердите пароль"</label>
-                 <input 
-                    type="text"
+                    <button class="btn-primary" on:click=submit_update_pass>
+                        "Сохранить и войти"
+                    </button>
 
-                    prop:value=move || (*new_pass.read()).pass2.clone()
-                    
-                    on:input:target=move |ev| {
-                        new_pass.update(|p| p.pass2 = ev.target().value());
-                    }
-                />
-            </div>
-            <div>
-                {move || {
-                    let error = err_str.get();
-                    (!error.is_empty()).then(|| view! { 
-                        <div class="text-red-500 font-bold bg-red-100 p-2 rounded">
-                            {error}
-                        </div> 
-                    })
-                }}
-                <button class="btn-primary" on:click=submit_update_pass>
-                    <p>"Вход"</p>
-                </button>
-            </div>
-
-            <div class="nav-links">
-                <button 
-                    class="link-style" 
-                    on:click=move |_| forgot_passwd.update(|p| *p = false)
-                >
-                    "назад?"
-                </button>
+                    <button 
+                        class="action-link" 
+                        on:click=move |_| forgot_passwd.update(|p| *p = false)
+                    >
+                        "назад?"
+                    </button>
+                </div>
             </div>
         </div>
+        </main>
     }
 }
 
 
 #[component]
-pub fn CheckPasswDbView() -> impl IntoView{
+pub fn CheckPasswDbView(
+    #[prop(into)] 
+    forgot_passwd: RwSignal<bool>) -> impl IntoView{
     let LoginContext{db_user, err_str} = use_context::<LoginContext>().expect("Context to be present");
 
     let password = RwSignal::new(String::new());
-    
-    let forgot_passwd = RwSignal::new(false);
-    
     let submit_check_pass = move |_| {
-        let id = db_user.with(|u| u.id);
+        let id = db_user.with(|u| u.id.clone());
         let password = password;
         let err_str = err_str;
 
@@ -520,43 +550,48 @@ pub fn CheckPasswDbView() -> impl IntoView{
 
 
     view!{
-        <div>
-            <div class="form-group">
-                <label>"Введите пароль"</label>
-                 <input 
-                    type="text"
 
-                    prop:value=move || password.get()
-                    
-                    on:input:target=move |ev| {
-                        password.set(ev.target().value());
-                    }
-                />
-            </div>
-            
-            <div>
-                {move || {
-                    let error = err_str.get();
-                    (!error.is_empty()).then(|| view! { 
-                        <div class="text-red-500 font-bold bg-red-100 p-2 rounded">
-                            {error}
-                        </div> 
-                    })
-                }}
-                <button class="btn-primary" on:click=submit_check_pass>
-                    <p>"Вход"</p>
-                </button>
-            </div>
+        <main class="main-content auth-page">
+        <div class="auth-top-wrapper">
+            <div class="panel-card auth-card"> 
+                <h2>"Вход в систему"</h2>
+                <div class="form-group">
+                    <label>"Введите пароль"</label>
+                    <input 
+                        type="text"
 
-            <div class="nav-links">
-                <button 
-                    class="link-style" 
-                    on:click=move |_| forgot_passwd.update(|p| *p = true)
-                >
-                    "забыли пароль?"
-                </button>
+                        prop:value=move || password.get()
+                        
+                        on:input:target=move |ev| {
+                            password.set(ev.target().value());
+                        }
+                    />
+                </div>
+                
+                <div class="form-footer-actions">
+                    {move || {
+                        let error = err_str.get();
+                        (!error.is_empty()).then(|| view! { 
+                            <div class="text-red-500 font-bold bg-red-100 p-2 rounded">
+                                {error}
+                            </div> 
+                        })
+                    }}
+                    <button class="btn-primary" on:click=submit_check_pass>
+                        "Вход"
+                    </button>
+                
+                    <button 
+                        class="action-link" 
+                        on:click=move |_| forgot_passwd.update(|p| *p = true)
+                    >
+                        "забыли пароль?"
+                    </button>
+                    // добавить назад
+                </div>
             </div>
         </div>
+        </main>
     }
 }
 
@@ -568,7 +603,7 @@ pub fn CheckPasswView() -> impl IntoView{
     view!{
         <Show 
             when=move || forgot_passwd.get()  
-            fallback=move || view! { <CheckPasswDbView/> }
+            fallback=move || view! { <CheckPasswDbView forgot_passwd=forgot_passwd/> }
             >
             <UpdatePasswDbView forgot_passwd=forgot_passwd/>
         </Show>
