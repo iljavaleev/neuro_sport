@@ -12,6 +12,7 @@ use wasm_bindgen_futures::spawn_local;
 use log::{info, error}; 
 
 
+
 #[wasm_bindgen]
 extern "C" {
     #[wasm_bindgen(js_namespace = ["window", "__TAURI__", "core"], catch)]
@@ -416,14 +417,16 @@ struct CheckUserPasswArg {
     passwd: String, 
 }
 
-// написать хэндлеры
 
+// написать хэндлеры
 #[component]
 pub fn UpdatePasswDbView(
      #[prop(into)] 
-    forgot_passwd: RwSignal<bool>) -> impl IntoView{
+    forgot_passwd: RwSignal<bool>,
+    ) -> impl IntoView{
     let new_pass = RwSignal::new(Passw::default());
-    let LoginContext{db_user, err_str} = use_context::<LoginContext>().expect("Context to be present");
+    let LoginContext{db_user, err_str} 
+        = use_context::<LoginContext>().expect("Context to be present");
 
 
     let submit_update_pass = move |_| {
@@ -600,12 +603,27 @@ pub fn CheckPasswDbView(
 #[component]
 pub fn CheckPasswView() -> impl IntoView{
     let forgot_passwd = RwSignal::new(false);
+    let otp_verified = RwSignal::new(false);
+
     view!{
         <Show 
             when=move || forgot_passwd.get()  
             fallback=move || view! { <CheckPasswDbView forgot_passwd=forgot_passwd/> }
             >
-            <UpdatePasswDbView forgot_passwd=forgot_passwd/>
+            <Show
+                when=move || otp_verified.get()
+                fallback={
+                    move || view! { 
+                        <ForgotPasswordView 
+                            otp_verified=otp_verified 
+                        /> 
+                    }
+                }
+            >
+                <UpdatePasswDbView 
+                    forgot_passwd=forgot_passwd
+                />
+            </Show>
         </Show>
 
     }
@@ -635,6 +653,157 @@ pub fn Login() -> impl IntoView{
             >
                 <CheckPasswView />
             </Show>
+        </div>
+    }
+}
+
+
+#[derive(Serialize, Deserialize)]
+struct EmailArgs { email: String }
+
+#[derive(Serialize, Deserialize)]
+struct VerifyArgs { email: String, code: String }
+
+#[derive(Serialize, Deserialize)]
+struct OtpJsResponse {
+    success: bool,
+    message: String,
+}
+
+#[component]
+pub fn ForgotPasswordView(
+    #[prop(into)] 
+    otp_verified: RwSignal<bool>,
+) -> impl IntoView {
+    
+    let LoginContext{db_user, err_str: _} 
+        = use_context::<LoginContext>().expect("Context to be present");
+   
+
+    let code = RwSignal::new(String::new());
+    let message = RwSignal::new(String::new());
+    let code_sent = RwSignal::new(false);
+
+    let verified_email = db_user.with(|u| u.email.clone());
+
+    let email_current = verified_email.clone();
+    let email_for_verify = verified_email.clone();
+
+
+    let request_otp_action = Action::new_local(move |email_str: &String| {
+        let e = email_str.clone();
+        async move {
+            let args = serde_wasm_bindgen::to_value(&EmailArgs { email: e }).unwrap();
+            if let Ok(res_js) = invoke("request_password_reset_otp", args).await {
+                let res: OtpJsResponse = serde_wasm_bindgen::from_value(res_js).unwrap();
+                res
+            } else {
+                OtpJsResponse { 
+                    success: false, 
+                    message: "Ошибка связи с бэкендом".to_string(), 
+                }
+            }
+        }
+    });
+
+
+    let verify_otp_action = Action::new_local(move |(email_str, code_val): &(String, String)| {
+        let e = email_str.clone();
+        let c = code_val.clone();
+        async move {
+            let args = serde_wasm_bindgen::to_value(&VerifyArgs { email: e, code: c }).unwrap();
+            if let Ok(res_js) = invoke("verify_password_reset_otp", args).await {
+                let res: OtpJsResponse = serde_wasm_bindgen::from_value(res_js).unwrap();
+                res
+            } else {
+                OtpJsResponse { 
+                    success: false, 
+                    message: "Ошибка верификации".to_string(),
+                }
+            }
+        }
+    });
+
+    
+    Effect::new(move |_| {
+        request_otp_action.value().with(|val| {
+            if let Some(res) = val {
+                message.set(res.message.clone());
+                if res.success {
+                    code_sent.set(true);
+                }
+            }
+        });
+    });
+
+    Effect::new(move |_| {
+        verify_otp_action.value().with(|val| {
+            if let Some(res) = val {
+                message.set(res.message.clone());
+                if res.success{
+                    // Тут логика перехода к экрану ввода нового пароля
+                }
+            }
+        });
+    });
+
+    let is_loading = move || request_otp_action.pending().get() || verify_otp_action.pending().get();
+
+    view! {
+        <div style="padding: 2rem; max-width: 25rem; margin: 0 auto; font-size: 1rem;">
+            <h2>"Восстановление доступа"</h2>
+            
+            <p style="color: #555; font-size: 0.9rem; margin-bottom: 1.5rem;">
+                {move || if code_sent.get() { 
+                    format!("Код отправлен на {}", verified_email) 
+                } else { 
+                    format!("Мы отправим код подтверждения на почту {}", verified_email) 
+                }}
+            </p>
+
+            <Show
+                when=move || code_sent.get()
+                fallback=move || {
+                    let email_current = email_current.clone();
+                    view! {
+                        <div style="display: flex; flex-direction: column; gap: 0.8rem;">
+                            <button 
+                                style="padding: 0.7rem; font-size: 1rem; background-color: #0076ff; color: white; border: none; border-radius: 0.25rem; cursor: pointer;"
+                                prop:disabled=is_loading
+                                on:click=move |_| { request_otp_action.dispatch(email_current.clone()); }>
+                                {move || if request_otp_action.pending().get() { "Отправка кода..." } else { "Получить код восстановления" }}
+                            </button>
+                        </div>
+                    }
+                }
+            >
+                {
+                    let email_for_verify = email_for_verify.clone();
+                    view! {
+                        <div style="display: flex; flex-direction: column; gap: 0.8rem;">
+                            <input 
+                                type="text" 
+                                placeholder="000000"
+                                maxlength="6"
+                                style="padding: 0.6rem; font-size: 1.2rem; text-align: center; letter-spacing: 0.3rem; border-radius: 0.25rem; border: 0.05rem solid #ccc;"
+                                on:input=move |ev| code.set(event_target_value(&ev))
+                                prop:value=code
+                                prop:disabled=is_loading
+                            />
+                            <button 
+                                style="padding: 0.7rem; font-size: 1rem; background-color: #34c759; color: white; border: none; border-radius: 0.25rem; cursor: pointer;"
+                                prop:disabled=is_loading
+                                on:click=move |_| { verify_otp_action.dispatch((email_for_verify.clone(), code.get())); }>
+                                {move || if verify_otp_action.pending().get() { "Проверка..." } else { "Подтвердить код" }}
+                            </button>
+                        </div>
+                    }
+                }
+            </Show>
+
+            <p style="margin-top: 1rem; color: #d10000; font-size: 0.85rem; text-align: center;">
+                {move || message.get()}
+            </p>
         </div>
     }
 }
