@@ -27,6 +27,7 @@ log = "^0.4"
 num_enum = "0.7"
 chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1.13", features = ["v4", "serde"] }
+base64 = "0.22"
 
 # --- Cryptography & Randomness (Upgraded for SQLx 0.9!) ---
 # Rand 0.10 uses "sys_rng" instead of "os_rng" or "getrandom"
@@ -41,8 +42,9 @@ sqlx = { version = "0.9", features = ["runtime-tokio", "tls-rustls", "sqlite", "
 rodio = "0.22" 
 
 # --- Email ---
-lettre = { version = "0.11", default-features = false, features = ["smtp-transport", "tokio1", "rustls-tls", "hostname"] }
+# --- lettre = { version = "0.11", default-features = false, features = ["smtp-transport", "tokio1", "rustls-tls", "hostname"] } ---
 
+lettre = { version = "0.11.23", default-features = false, features = ["builder", "smtp-transport", "tokio1", "tokio1-rustls", "rustls", "ring", "webpki-roots"] }
 
 [profile.release]
 codegen-units = 1

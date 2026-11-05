@@ -4,6 +4,8 @@ use num_enum::TryFromPrimitive;
 use chrono::{NaiveDate, NaiveDateTime};
 use uuid::Uuid;
 
+use sqlx::{SqlitePool};
+
 
 #[derive(Serialize, Clone)]
 pub struct ToFrontMessage {
@@ -88,4 +90,13 @@ pub struct ExerciseStat {
     pub duration_seconds: f64,
     pub completed_rounds: i64,
     pub additional_metrics: Option<sqlx::types::Json<serde_json::Value>>, 
+}
+
+pub struct DbState(pub SqlitePool);
+
+#[derive(Serialize, Deserialize)]
+pub struct OtpResponse {
+    pub success: bool,
+    pub message: String,
+    pub code: Option<String>
 }

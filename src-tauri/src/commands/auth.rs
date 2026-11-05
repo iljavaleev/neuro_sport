@@ -5,9 +5,12 @@ use argon2::{
 use log::{info, error};
 use tauri::State;
 use crate::state::AppState;
-use crate::types::{FrontendUser, UserResponse};
+use crate::types::{FrontendUser, UserResponse, OtpResponse, DbState};
 use lettre::transport::smtp::authentication::Credentials;
 use lettre::{AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor};
+use rand::RngExt;
+use chrono::{Utc, Duration};
+use base64::{prelude::BASE64_STANDARD, Engine};
 
 
 #[tauri::command]
@@ -42,7 +45,6 @@ pub async fn create_user(
     Ok(())
 }
 
-
 #[tauri::command]
 pub async fn check_user_exists(
     state: State<'_, AppState>,
@@ -65,68 +67,83 @@ pub async fn check_user_exists(
     })
 }
 
-
-
 #[tauri::command]
-pub fn register_user(password_from_frontend: String) -> Result<(), String> {
+pub async fn check_user_password(
+    id: String,
+    passwd: String,
+    state: State<'_, DbState>,
+) -> Result<OtpResponse, String> {
     
-    let argon2 = Argon2::default();
+    let row = sqlx::query!(
+        "SELECT password_hash FROM user WHERE id = ?",
+        id
+    )
+    .fetch_optional(&state.0)
+    .await
+    .map_err(|e| format!("Database error: {e}"))?;
     
-    let password_hash = argon2
-        .hash_password(password_from_frontend.as_bytes())
-        .map_err(|e| e.to_string())? 
-        .to_string();
-    
-    
-    // let parsed_hash = PasswordHash::new(&password_hash)?;
-    // assert!(Argon2::default().verify_password(password, &parsed_hash).is_ok());
+    let db_hash = match row {
+        Some(r) => r.password_hash,
+        None => {
+            return Ok(OtpResponse {
+                success: false,
+                message: "Пользователь не найден".to_string(),
+                code: None,
+            })
+        }
+    };
 
-    // 4. Save `password_hash` to your SQLite table
-    // execute_sql("INSERT INTO users (password) VALUES (?)", vec![password_hash]);
+    let parsed_hash = PasswordHash::new(&db_hash)
+        .map_err(|e| format!("Invalid password hash format in DB: {e}"))?;
 
-    Ok(())
-}
 
-use sqlx::SqlitePool;
-use rand::RngExt;
-use chrono::{Utc, Duration};
-use serde::{Deserialize, Serialize};
-use uuid::Uuid;
-
-// https://mailtrap.io/sandboxes/4998701/settings
-#[tauri::command]
-async fn send_workout_report(recipient_email: String, body_text: String) -> Result<String, String> {
-    let email = Message::builder()
-        .from("Sport Timer App <no-reply@iljavaleev.com>".parse().unwrap())
-        .to(recipient_email.parse().map_err(|e| format!("Invalid recipient: {e}"))?)
-        .subject("Your Agility Workout Statistics")
-        .body(body_text)
-        .map_err(|e| e.to_string())?;
-
-    // 2. Set up the relay server transport (e.g., Mailtrap, SendGrid, etc.)
-   let creds = Credentials::new(
-        "9ff9ba3764b2e1".to_string(), 
-        "fa8f3aa6b0ce98".to_string()
-    );
-    
-    let mailer = AsyncSmtpTransport::<Tokio1Executor>::starttls_relay("sandbox.smtp.mailtrap.io")
-        .map_err(|e| e.to_string())?
-        .port(2525)
-        .credentials(creds)
-        .build();
-
-    match mailer.send(email).await {
-        Ok(_) => Ok("Email sent successfully!".to_string()),
-        Err(err) => Err(format!("Delivery failed (Check connectivity/settings): {err}")),
+    match Argon2::default().verify_password(passwd.as_bytes(), &parsed_hash) {
+        Ok(_) => Ok(OtpResponse {
+            success: true,
+            message: "Пароль верный".to_string(),
+            code: None,
+        }),
+        Err(_) => Ok(OtpResponse {
+            success: false,
+            message: "Неверный пароль".to_string(),
+            code: None,
+        }),
     }
 }
 
-pub struct DbState(pub SqlitePool);
+// https://mailtrap.io/sandboxes/4998701/settings
+use lettre::transport::smtp::client::{Tls, TlsParameters};
 
-#[derive(Serialize, Deserialize)]
-pub struct OtpResponse {
-    success: bool,
-    message: String,
+#[tauri::command]
+async fn send_otp_code(recipient_email: String, body_text: String) -> Result<String, String> {
+    let email = Message::builder()
+        .from("Sport Timer App <no-reply@iljavaleev.com>".parse().unwrap())
+        .to(recipient_email.parse().map_err(|e| format!("Invalid recipient: {e}"))?)
+        .subject("Код для смены пароля")
+        .body(body_text)
+        .map_err(|e| e.to_string())?;
+
+    let creds = Credentials::new(
+        "9ff9ba3764b2e1".to_string(), 
+        "fa8f3aa6b0ce98".to_string()
+    );
+
+    let tls_parameters = TlsParameters::builder("sandbox.smtp.mailtrap.io".to_string())
+        .build_rustls()
+        .map_err(|e| format!("TLS Initialization Error: {e}"))?;
+
+    let mailer = AsyncSmtpTransport::<Tokio1Executor>::relay("sandbox.smtp.mailtrap.io")
+        .map_err(|e| e.to_string())?
+        .port(2525)
+        .tls(Tls::Required(tls_parameters))
+        .credentials(creds)
+        .build();
+
+
+    match mailer.send(email).await {
+        Ok(_) => Ok("Отправлено".to_string()),
+        Err(err) => Err(format!("Ошибка при отправке письма: {err}")),
+    }
 }
 
 
@@ -152,6 +169,7 @@ pub async fn request_password_reset_otp(
             return Ok(OtpResponse {
                 success: false,
                 message: "Подождите 30 секунд перед повторным запросом".to_string(),
+                code: None
             });
         }
     }
@@ -180,11 +198,12 @@ pub async fn request_password_reset_otp(
     .map_err(|e| e.to_string())?;
 
 
-    match send_workout_report(email.clone(), code_str).await {
-        Ok(msg) => {
+    match send_otp_code(email.clone(), code_str).await {
+        Ok(_) => {
             Ok(OtpResponse {
                 success: true,
                 message: "Код подтверждения отправлен на вашу почту".to_string(),
+                code: None
             })
         },
         Err(err) => {
@@ -192,23 +211,21 @@ pub async fn request_password_reset_otp(
             Ok(OtpResponse {
                 success: false,
                 message: "Не удалось отправить код на почту".to_string(),
+                code: None
             })
         }
             
     }
 }
 
-pub struct PasswordResetSession(pub std::sync::Mutex<Option<String>>);
-
-
 #[tauri::command]
 pub async fn verify_password_reset_otp(
     email: String,
     code: String,
-    session: State<'_, PasswordResetSession>,
+    state: State<'_, DbState>,
 ) -> Result<OtpResponse, String> {
     let pool = &state.0;
-    let now = Utc::now();
+    let now = Utc::now().naive_utc();
 
     let row = sqlx::query!(
         "SELECT code, expires_at, attempts FROM otp_code WHERE email = ?",
@@ -223,16 +240,17 @@ pub async fn verify_password_reset_otp(
         None => return Ok(
             OtpResponse { 
                 success: false, 
-                message: "Код не запрашивался".to_string(), 
+                message: "Код не запрашивался".to_string(),
+                code: None 
             }
         ),
     };
 
-    let fail_string: Option<String> = None;
-    if otp.attempts >= 3{
+    let mut fail_string: Option<String> = None;
+    if otp.attempts.unwrap() >= 3{
         fail_string = Some("Превышено число попыток. Запросите код заново".to_string());
     }
-    if !fail_string.is_some()  && now > otp.expires_at.parse().unwrap_or(now){
+    if !fail_string.is_some() && (now > otp.expires_at){
         fail_string = Some("Срок действия кода истек".to_string());
     }
 
@@ -246,7 +264,8 @@ pub async fn verify_password_reset_otp(
         return Ok(
             OtpResponse { 
                 success: false, 
-                message: fail_string.unwrap(), 
+                message: fail_string.unwrap(),
+                code: None 
             }
         );
     }
@@ -259,11 +278,17 @@ pub async fn verify_password_reset_otp(
             .await
             .ok();
 
-            *session.0.lock().unwrap() = Some(email);
-            return Ok(OtpResponse { 
-                success: true, 
-                message: "Код подтвержден".to_string(), 
-            }); 
+        let reset_expires_at = Utc::now() + chrono::Duration::minutes(10);
+    
+        let raw_token = format!("{}|{}", email, reset_expires_at.to_rfc3339());
+        
+        let reset_token = BASE64_STANDARD.encode(raw_token);
+
+        return Ok(OtpResponse { 
+            success: true, 
+            message: "Код подтвержден".to_string(),
+            code: Some(reset_token)
+        }); 
     } else {
         sqlx::query("UPDATE otp_code SET attempts = attempts + 1 WHERE email = ?")
             .bind(&email)
@@ -274,22 +299,39 @@ pub async fn verify_password_reset_otp(
         Ok(OtpResponse {
             success: false,
             message: "Неверный код подтверждения".to_string(),
+            code: None
         })
     }
 }
 
-
 #[tauri::command]
 pub async fn update_user_password(
+    code: String,
     new_password: String, 
-    session: tauri::State<'_, PasswordResetSession>,
     db_state: tauri::State<'_, DbState>,
 ) -> Result<String, String> {
-    let mut lock = session.0.lock().unwrap();
-    let email = match lock.take() { 
-        Some(e) => e,
-        None => return Err("Действие запрещено. Вы не прошли проверку OTP".to_string()),
-    };
+   
+    let decoded_bytes = BASE64_STANDARD.decode(code)
+        .map_err(|_| "Невалидный токен сброса".to_string())?;
+    let decoded_str = String::from_utf8(decoded_bytes)
+        .map_err(|_| "Ошибка чтения данных токена".to_string())?;
+
+    let parts: Vec<&str> = decoded_str.split('|').collect();
+    if parts.len() != 2 {
+        return Err("Неверный формат токена".to_string());
+    }
+
+    let email = parts[0];
+    let expires_at_str = parts[1];
+
+    let expires_at = chrono::DateTime::parse_from_rfc3339(expires_at_str)
+        .map_err(|_| "Ошибка парсинга времени токена".to_string())?
+        .with_timezone(&Utc);
+
+    if Utc::now() > expires_at {
+        return Err("Время действия ссылки на сброс пароля истекло".to_string());
+    }
+
 
     let pool = &db_state.0;
     let argon2 = Argon2::default();
@@ -298,6 +340,7 @@ pub async fn update_user_password(
         .hash_password(new_password.as_bytes())
         .map_err(|e| e.to_string())? 
         .to_string();
+    
 
     sqlx::query("UPDATE user SET password_hash = ? WHERE email = ?")
         .bind(&password_hash)
