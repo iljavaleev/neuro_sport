@@ -5,12 +5,14 @@ use argon2::{
 use log::{info, error};
 use tauri::State;
 use crate::state::AppState;
-use crate::types::{FrontendUser, UserResponse, OtpResponse, DbState};
+use crate::types::{FrontendUser, UserResponse, OtpResponse, DbState, UserSessionData};
 use lettre::transport::smtp::authentication::Credentials;
 use lettre::{AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor};
 use rand::RngExt;
 use chrono::{Utc, Duration};
 use base64::{prelude::BASE64_STANDARD, Engine};
+
+use uuid::Uuid;
 
 
 #[tauri::command]
@@ -67,49 +69,6 @@ pub async fn check_user_exists(
     })
 }
 
-#[tauri::command]
-pub async fn check_user_password(
-    id: String,
-    passwd: String,
-    state: State<'_, DbState>,
-) -> Result<OtpResponse, String> {
-    
-    let row = sqlx::query!(
-        "SELECT password_hash FROM user WHERE id = ?",
-        id
-    )
-    .fetch_optional(&state.0)
-    .await
-    .map_err(|e| format!("Database error: {e}"))?;
-    
-    let db_hash = match row {
-        Some(r) => r.password_hash,
-        None => {
-            return Ok(OtpResponse {
-                success: false,
-                message: "Пользователь не найден".to_string(),
-                code: None,
-            })
-        }
-    };
-
-    let parsed_hash = PasswordHash::new(&db_hash)
-        .map_err(|e| format!("Invalid password hash format in DB: {e}"))?;
-
-
-    match Argon2::default().verify_password(passwd.as_bytes(), &parsed_hash) {
-        Ok(_) => Ok(OtpResponse {
-            success: true,
-            message: "Пароль верный".to_string(),
-            code: None,
-        }),
-        Err(_) => Ok(OtpResponse {
-            success: false,
-            message: "Неверный пароль".to_string(),
-            code: None,
-        }),
-    }
-}
 
 // https://mailtrap.io/sandboxes/4998701/settings
 use lettre::transport::smtp::client::{Tls, TlsParameters};
@@ -351,3 +310,106 @@ pub async fn update_user_password(
 
     Ok("Пароль успешно изменен".to_string())
 }
+
+
+
+#[tauri::command]
+pub async fn check_user_password(
+    id: String,
+    passwd: String,
+    state: State<'_, DbState>,
+) -> Result<OtpResponse, String> {
+    
+    let row = sqlx::query!(
+        "SELECT password_hash FROM user WHERE id = ?",
+        id
+    )
+    .fetch_optional(&state.0)
+    .await
+    .map_err(|e| format!("Database error: {e}"))?;
+    
+    let db_hash = match row {
+        Some(r) => r.password_hash,
+        None => {
+            return Ok(OtpResponse {
+                success: false,
+                message: "Пользователь не найден".to_string(),
+                code: None,
+                auth_info: None,
+            })
+        }
+    };
+
+    let parsed_hash = PasswordHash::new(&db_hash)
+        .map_err(|e| format!("Invalid password hash format in DB: {e}"))?;
+
+    match Argon2::default().verify_password(passwd.as_bytes(), &parsed_hash) {
+        Ok(_) => {
+
+            let token = Uuid::new_v4().to_string();
+
+            let expires_duration = Duration::days(14);
+            let expires_at_ms = (Utc::now() + expires_duration).timestamp_millis() as f64;
+
+            sqlx::query!(
+                "INSERT INTO user_session (token, user_id, expires_at) VALUES (?, ?, ?)",
+                token,
+                id,
+                expires_at_ms
+            )
+            .execute(&state.0)
+            .await
+            .map_err(|e| format!("Failed to save auth token: {e}"))?;
+
+            Ok(OtpResponse {
+                success: true,
+                message: "Пароль верный".to_string(),
+                code: None,
+                auth_info: Some(UserSessionData {
+                    user_id: id,
+                    token,
+                    expires_at: expires_at_ms,
+                }),
+            })
+        },
+        Err(_) => Ok(OtpResponse {
+            success: false,
+            message: "Неверный пароль".to_string(),
+            code: None,
+            auth_info: None,
+        }),
+    }
+}
+
+
+#[tauri::command]
+pub async fn verify_user_token(
+    token: String,
+    state: State<'_, DbState>,
+) -> Result<Option<UserSessionData>, String> {
+    let now_ms = Utc::now().timestamp_millis() as f64;
+
+    let row = sqlx::query!(
+        "SELECT user_id, expires_at FROM user_session WHERE token = ? AND expires_at > ?",
+        token,
+        now_ms
+    )
+    .fetch_optional(&state.0)
+    .await
+    .map_err(|e| format!("Database error: {e}"))?;
+
+    match row {
+        Some(r) => Ok(Some(UserSessionData {
+            user_id: r.user_id,
+            token,
+            expires_at: r.expires_at,
+        })),
+        None => {
+            let _ = sqlx::query!("DELETE FROM user_session WHERE token = ?", token)
+                .execute(&state.0)
+                .await;
+            Ok(None)
+        }
+    }
+}
+

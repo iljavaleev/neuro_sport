@@ -94,9 +94,18 @@ pub struct ExerciseStat {
 
 pub struct DbState(pub SqlitePool);
 
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct UserSessionData {
+    pub user_id: String,
+    pub token: String,
+    pub expires_at: f64,
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct OtpResponse {
     pub success: bool,
     pub message: String,
-    pub code: Option<String>
+    pub code: Option<String>,
+    pub auth_info: Option<UserSessionData>,
 }

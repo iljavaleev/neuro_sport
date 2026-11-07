@@ -1,159 +1,15 @@
 use leptos::{prelude::*};
-use serde::{Deserialize, Serialize};
-use chrono::{Local, NaiveDate, Datelike};
-use regex::Regex;
-use std::sync::LazyLock;
+use chrono::{NaiveDate};
 use leptos_router::hooks::use_navigate;
 use leptos_router::NavigateOptions;
-use wasm_bindgen::prelude::wasm_bindgen;
-use wasm_bindgen::JsValue;
+
 use serde_wasm_bindgen::{from_value, to_value};
 use wasm_bindgen_futures::spawn_local;
 use log::{info, error}; 
+use crate::auth::types::*;
+use crate::auth::utils::checker;
 
 
-
-#[wasm_bindgen]
-extern "C" {
-    #[wasm_bindgen(js_namespace = ["window", "__TAURI__", "core"], catch)]
-    async fn invoke(cmd: &str, args: JsValue) -> Result<JsValue, JsValue>;
-}
-
-pub mod Checker{
-    use super::*;
-    pub fn check_password(password: &String) -> Result<(), String>{
-            
-        if password.len() < 8 {
-            return Err("Пароль должен быть не менее 8 символов в длину".to_string());
-        }
-        
-        if password.len() > 64 {
-            return Err("Пароль слишком длинный (максимум 64 символа)".to_string());
-        }
-        
-        let mut has_digit = false;
-        let mut has_special = false;
-
-        for ch in password.chars() {
-            if ch.is_ascii_digit() {
-                has_digit = true;
-            } else if ch.is_ascii_punctuation() || "§±!@#$%^&*()_+-=[]{}|;':\",./<>?".contains(ch) {
-                has_special = true;
-            }
-        }
-
-        if !has_digit {
-            return Err("Пароль должен содержать хотя бы одну цифру".to_string());
-        }
-        if !has_special {
-            return Err("Пароль должен содержать хотя бы один специальный символ (например, !, @, #, $)".to_string());
-        }
-
-        Ok(())
-    }
-
-    pub fn check_date_of_birth(date_of_birth: NaiveDate) -> Result<(), String>{
-        
-        let today = Local::now().naive_local().date();
-
-        if date_of_birth > today {
-            return Err("Дата рождения не может быть в будущем".to_string());
-        }
-
-        let mut age = today.year() - date_of_birth.year();
-        
-        if today.month() < date_of_birth.month() || (today.month() == date_of_birth.month() && today.day() < date_of_birth.day()) {
-            age -= 1;
-        }
-
-        if age < 14 {
-            return Err("Регистрация доступна только пользователям от 14 лет".to_string());
-        }
-        if age > 90 {
-            return Err("Указан нереалистичный возраст".to_string());
-        }
-        
-        Ok(())
-    }
-
-    pub fn check_email(email: &String) -> Result<(), String>{
-        if email.trim().is_empty() {
-            return Err("Email не может быть пустым".to_string());
-        }
-
-        static EMAIL_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-            Regex::new(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$").unwrap()
-        });
-
-        if !EMAIL_REGEX.is_match(email.as_str()) {
-            return Err("Некорректный формат Email адреса".to_string());
-        }
-        
-        Ok(())
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct User {
-    pub email: String,
-    pub password: String,
-    pub date_of_birth: Option<NaiveDate>,
-    pub sex: String,
-}
-
-impl User {
-    pub fn new() -> Self{
-        Self{
-            email: String::new(),
-            password: String::new(),
-            date_of_birth: None,
-            sex: String::new(),
-        }
-    }
-
-    fn check_password(&self) -> Result<(), String>{
-        Checker::check_password(&self.password)
-    }
-
-    fn check_date_of_birth(&self) -> Result<(), String>{
-        let dob = match self.date_of_birth {
-            Some(date) => date,
-            None => return Err("Пожалуйста, укажите дату рождения".to_string()),
-        };
-
-        Checker::check_date_of_birth(dob)
-    }
-
-    fn check_email(&self) -> Result<(), String>{
-        Checker::check_email(&self.email)
-    }
-
-    pub fn check(&self) -> Result<(), String>{
-        if let Err(err) = self.check_password() {
-            return Err(err);
-        }
-        if let Err(err) = self.check_email() {
-            return Err(err);
-        }
-        if let Err(err) = self.check_date_of_birth() {
-            return Err(err);
-        }
-
-        Ok(())
-    }
-}
-
-
-#[derive(Default)]
-pub struct Passw{
-    pub pass: String,
-    pub pass2: String
-}
-
-#[derive(Serialize)]
-struct CreateUserArg {
-    user: User, 
-}
 
 #[component]
 pub fn Register() -> impl IntoView{
@@ -201,8 +57,6 @@ pub fn Register() -> impl IntoView{
                 navigate("/", NavigateOptions::default());
             }
         });
-
-        
     };
 
     view!{
@@ -316,22 +170,8 @@ pub fn Register() -> impl IntoView{
 
 }
 
-
-
-#[derive(Serialize)]
-struct CheckUserEmailArg {
-    email: String, 
-}
-
-
-#[derive(Deserialize, Debug, Default)]
-pub struct UserResponse {
-    pub id: String, 
-    pub email: String,
-}
-
 #[component]
-pub fn CheckEmailView(
+pub fn CheckEmailView (
     #[prop(into)] 
     user_exists: RwSignal<bool>,
     ) -> impl IntoView{
@@ -409,46 +249,44 @@ pub fn CheckEmailView(
     
 }
 
-
-
-#[derive(Serialize)]
-struct CheckUserPasswArg {
-    id: String,
-    passwd: String, 
-}
-
-
 // написать хэндлеры
 #[component]
 pub fn UpdatePasswDbView(
-     #[prop(into)] 
+    #[prop(into)] 
     forgot_passwd: RwSignal<bool>,
+    #[prop(into)] 
+    frontend_code_for_otp: RwSignal<Option<String>>,
+    #[prop(into)]
+    otp_verified: RwSignal<bool>
     ) -> impl IntoView{
     let new_pass = RwSignal::new(Passw::default());
-    let LoginContext{db_user, err_str} 
+    let LoginContext{db_user: _, err_str} 
         = use_context::<LoginContext>().expect("Context to be present");
 
+    if !frontend_code_for_otp.get().is_some(){
+        err_str.update(|e| *e = "Ошибка верификации".to_string() );
+        otp_verified.update(|v| *v = false );
+    }
 
     let submit_update_pass = move |_| {
-        let id = db_user.with(|u| u.id.clone());
         let err_str = err_str;
         let passwd = new_pass.with(|p| p.pass.clone());
         
-        if let Err(err) = Checker::check_password(&passwd) {
+        if let Err(err) = checker::check_password(&passwd) {
             err_str.update(|e| *e = err); 
             return
         }
 
         spawn_local(async move {
-            let payload = CheckUserPasswArg {
-                id,
-                passwd
+            let payload = UpdateUserPasswArg {
+                code: frontend_code_for_otp.get_untracked().unwrap(),
+                newPassword: passwd
             };
             
             if let Ok(args) = to_value(&payload) {
                 match invoke("update_user_password", args).await {
                     Ok(_) => {
-                        // Handle successful login here (e.g., redirect or update state)
+                        forgot_passwd.update(|p| *p = false)
                     },
                     Err(js_error) => {
                         let err_msg = serde_wasm_bindgen::from_value(js_error)
@@ -516,7 +354,6 @@ pub fn UpdatePasswDbView(
     }
 }
 
-
 #[component]
 pub fn CheckPasswDbView(
     #[prop(into)] 
@@ -538,8 +375,11 @@ pub fn CheckPasswDbView(
             
             if let Ok(args) = to_value(&payload) {
                 match invoke("check_user_password", args).await {
-                    Ok(_) => {
-                        // Handle successful login here (e.g., redirect or update state)
+                    Ok(res_js) => {
+                        let res: OtpJsResponse = serde_wasm_bindgen::from_value(res_js).unwrap();
+                        if res.success{
+                            // todo login and to main
+                        }
                     },
                     Err(js_error) => {
                         let err_msg = serde_wasm_bindgen::from_value(js_error)
@@ -598,13 +438,14 @@ pub fn CheckPasswDbView(
     }
 }
 
-
-
 #[component]
 pub fn CheckPasswView() -> impl IntoView{
     let forgot_passwd = RwSignal::new(false);
+    
     let otp_verified = RwSignal::new(false);
-
+    let frontend_code_for_otp = RwSignal::new(Some(String::new()));
+    
+    
     view!{
         <Show 
             when=move || forgot_passwd.get()  
@@ -615,25 +456,21 @@ pub fn CheckPasswView() -> impl IntoView{
                 fallback={
                     move || view! { 
                         <ForgotPasswordView 
-                            otp_verified=otp_verified 
+                            otp_verified=otp_verified
+                            frontend_code_for_otp=frontend_code_for_otp 
                         /> 
                     }
                 }
             >
                 <UpdatePasswDbView 
                     forgot_passwd=forgot_passwd
+                    frontend_code_for_otp=frontend_code_for_otp
+                    otp_verified=otp_verified
                 />
             </Show>
         </Show>
 
     }
-}
-
-
-#[derive(Copy, Clone)]
-struct LoginContext{
-    db_user: RwSignal<UserResponse>,
-    err_str: RwSignal<String>,
 }
 
 #[component]
@@ -657,26 +494,15 @@ pub fn Login() -> impl IntoView{
     }
 }
 
-
-#[derive(Serialize, Deserialize)]
-struct EmailArgs { email: String }
-
-#[derive(Serialize, Deserialize)]
-struct VerifyArgs { email: String, code: String }
-
-#[derive(Serialize, Deserialize)]
-struct OtpJsResponse {
-    success: bool,
-    message: String,
-}
-
 #[component]
 pub fn ForgotPasswordView(
     #[prop(into)] 
     otp_verified: RwSignal<bool>,
+    #[prop(into)] 
+    frontend_code_for_otp: RwSignal<Option<String>>
 ) -> impl IntoView {
     
-    let LoginContext{db_user, err_str: _} 
+    let LoginContext{db_user, err_str} 
         = use_context::<LoginContext>().expect("Context to be present");
    
 
@@ -700,7 +526,8 @@ pub fn ForgotPasswordView(
             } else {
                 OtpJsResponse { 
                     success: false, 
-                    message: "Ошибка связи с бэкендом".to_string(), 
+                    message: "Ошибка связи с бэкендом".to_string(),
+                    code: None 
                 }
             }
         }
@@ -719,6 +546,7 @@ pub fn ForgotPasswordView(
                 OtpJsResponse { 
                     success: false, 
                     message: "Ошибка верификации".to_string(),
+                    code: None
                 }
             }
         }
@@ -741,7 +569,10 @@ pub fn ForgotPasswordView(
             if let Some(res) = val {
                 message.set(res.message.clone());
                 if res.success{
-                    // Тут логика перехода к экрану ввода нового пароля
+                    frontend_code_for_otp.update(|c| *c = res.code.clone());
+                    otp_verified.update(|v| *v = true );
+                }else {
+                    err_str.update(|e| *e = res.message.clone() )
                 }
             }
         });

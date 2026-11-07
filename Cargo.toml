@@ -39,12 +39,12 @@ name = "neuro_sport-ui"
 
 [dependencies.web-sys]
 version = "0.3"
-# You must explicitly enable features for the Web APIs you plan to use
 features = [
   "Document",
   "Element",
   "HtmlInputElement",
   "Window",
   "HtmlAudioElement",
-  "MouseEvent"
+  "MouseEvent",
+  "Storage",
 ]

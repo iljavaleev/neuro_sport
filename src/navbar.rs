@@ -1,8 +1,16 @@
 use leptos::{prelude::*};
+use crate::auth::AuthContext;
 
 #[component]
 pub fn navbar() -> impl IntoView{
-    
+    let auth_context = use_context::<AuthContext>().expect("Context to be present");
+    let show_logout = RwSignal::new(auth_context.is_authenticated());
+    Effect::new(move |_| {
+        show_logout.update(|show| *show = 
+            auth_context.session.with(|s| s.is_some()));
+    });
+
+
     view!{
         <nav class="navbar">
             <div class="navbar-content">
@@ -20,19 +28,13 @@ pub fn navbar() -> impl IntoView{
                         "Статистика"
                     </a>
                     
-                    
-
-                    <a href="/login" class="nav-link ms-auto">
-                        "Вход"
-                    </a>
-
-                    <a href="/logout" class="nav-link">
-                        "Выход"
-                    </a>
-
-                    <a href="/register" class="nav-link">
-                        "Регистарция"
-                    </a>
+                   
+                    {move || if show_logout.get(){
+                            Some(view! {<a href="/logout" class="nav-link">"Выход"</a>})
+                        }else{
+                            Some(view!{<a href="/login" class="nav-link ms-auto">"Вход"</a>})
+                        }
+                    }
                 </div>
             
             </div>
