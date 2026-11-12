@@ -1,6 +1,11 @@
 use serde::{Serialize, Deserialize};
 use num_enum::TryFromPrimitive;
 
+use chrono::{NaiveDate, NaiveDateTime};
+use uuid::Uuid;
+
+use sqlx::{SqlitePool};
+
 
 #[derive(Serialize, Clone)]
 pub struct ToFrontMessage {
@@ -25,4 +30,79 @@ pub struct UserOptions{
 pub enum TouchOption {
     Without = 0,
     With = 1,
+}
+
+#[derive(Debug, Serialize, Deserialize,)]
+pub struct User {
+    pub id: Uuid,
+    pub email: String,
+    pub password_hash: String,
+    pub date_of_birth: NaiveDate,
+    pub sex: String,
+    pub created_at: NaiveDateTime,
+}
+
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct FrontendUser {
+    pub email: String,
+    pub password: String,
+    pub date_of_birth: NaiveDate,
+    pub sex: String,
+}
+
+#[derive(Deserialize, Debug, Serialize)]
+pub struct UserResponse {
+    pub id: String, 
+    pub email: String,
+}
+
+
+#[derive(Debug, Serialize, Deserialize,)]
+pub struct Session {
+    pub id: Uuid,
+    pub user_id: i128,
+    pub exercise_id: i128,
+    pub date_of_birth: NaiveDateTime,
+    pub created_at: NaiveDateTime,
+}
+
+#[derive(Debug, Serialize, Deserialize,)]
+pub struct Exercise {
+    pub id: Uuid,
+    pub name: String,
+    pub description: String,
+    pub created_at: NaiveDateTime,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AgilityMetrics {
+    pub missed_signals: i64,
+    pub avg_reaction_time_ms: f64,
+    pub reaction_history: Vec<f64>, // Массив времени каждого касания
+}
+
+
+#[derive(Debug, Serialize, Deserialize, sqlx::FromRow, Clone)]
+pub struct ExerciseStat {
+    pub id: i64,
+    pub session_id: i64,
+    pub duration_seconds: f64,
+    pub completed_rounds: i64,
+    pub additional_metrics: Option<sqlx::types::Json<serde_json::Value>>, 
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct SessionData {
+    pub user_id: String,
+    pub token: String,
+    pub expires_at: f64,
+}
+
+#[derive(Serialize, Deserialize, Default)]
+pub struct OtpResponse {
+    pub success: bool,
+    pub message: String,
+    pub code: Option<String>,
+    pub auth_info: Option<SessionData>,
 }
