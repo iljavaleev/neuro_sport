@@ -14,7 +14,12 @@ use commands::{
     pause_play_sound_round, 
     resume_play_sound_round, 
     create_user, 
-    check_user_exists
+    check_user_exists,
+    request_password_reset_otp, 
+    verify_password_reset_otp,
+    update_user_password,
+    check_user_password,
+    verify_user_token
 };
 
 
@@ -30,7 +35,12 @@ pub fn run() {
             pause_play_sound_round,
             resume_play_sound_round,
             create_user,
-            check_user_exists
+            check_user_exists,
+            request_password_reset_otp, 
+            verify_password_reset_otp,
+            update_user_password,
+            check_user_password,
+            verify_user_token
 
         ])
         .setup(|app| {

@@ -5,15 +5,17 @@ use argon2::{
 use log::{info, error};
 use tauri::State;
 use crate::state::AppState;
-use crate::types::{FrontendUser, UserResponse, OtpResponse, DbState, UserSessionData};
+use crate::types::{FrontendUser, UserResponse, OtpResponse, SessionData};
 use lettre::transport::smtp::authentication::Credentials;
 use lettre::{AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor};
 use rand::RngExt;
 use chrono::{Utc, Duration};
 use base64::{prelude::BASE64_STANDARD, Engine};
 
+use lettre::transport::smtp::client::{Tls, TlsParameters};
 use uuid::Uuid;
 
+// https://mailtrap.io/sandboxes/4998701/settings
 
 #[tauri::command]
 pub async fn create_user(
@@ -70,9 +72,6 @@ pub async fn check_user_exists(
 }
 
 
-// https://mailtrap.io/sandboxes/4998701/settings
-use lettre::transport::smtp::client::{Tls, TlsParameters};
-
 #[tauri::command]
 async fn send_otp_code(recipient_email: String, body_text: String) -> Result<String, String> {
     let email = Message::builder()
@@ -82,22 +81,10 @@ async fn send_otp_code(recipient_email: String, body_text: String) -> Result<Str
         .body(body_text)
         .map_err(|e| e.to_string())?;
 
-    let creds = Credentials::new(
-        "9ff9ba3764b2e1".to_string(), 
-        "fa8f3aa6b0ce98".to_string()
-    );
-
-    let tls_parameters = TlsParameters::builder("sandbox.smtp.mailtrap.io".to_string())
-        .build_rustls()
-        .map_err(|e| format!("TLS Initialization Error: {e}"))?;
-
-    let mailer = AsyncSmtpTransport::<Tokio1Executor>::relay("sandbox.smtp.mailtrap.io")
-        .map_err(|e| e.to_string())?
-        .port(2525)
-        .tls(Tls::Required(tls_parameters))
-        .credentials(creds)
+    let mailer = 
+        AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous("127.0.0.1")
+        .port(1025)
         .build();
-
 
     match mailer.send(email).await {
         Ok(_) => Ok("Отправлено".to_string()),
@@ -105,13 +92,12 @@ async fn send_otp_code(recipient_email: String, body_text: String) -> Result<Str
     }
 }
 
-
 #[tauri::command]
 pub async fn request_password_reset_otp(
     email: String,
-    state: State<'_, DbState>,
+    state: State<'_, AppState>,
 ) -> Result<OtpResponse, String> {
-    let pool = &state.0;
+    let pool = &state.db;
     let now = Utc::now();
 
 
@@ -128,7 +114,8 @@ pub async fn request_password_reset_otp(
             return Ok(OtpResponse {
                 success: false,
                 message: "Подождите 30 секунд перед повторным запросом".to_string(),
-                code: None
+                code: None, 
+                auth_info: None
             });
         }
     }
@@ -162,7 +149,7 @@ pub async fn request_password_reset_otp(
             Ok(OtpResponse {
                 success: true,
                 message: "Код подтверждения отправлен на вашу почту".to_string(),
-                code: None
+               ..Default::default()
             })
         },
         Err(err) => {
@@ -170,7 +157,7 @@ pub async fn request_password_reset_otp(
             Ok(OtpResponse {
                 success: false,
                 message: "Не удалось отправить код на почту".to_string(),
-                code: None
+                ..Default::default()
             })
         }
             
@@ -181,9 +168,9 @@ pub async fn request_password_reset_otp(
 pub async fn verify_password_reset_otp(
     email: String,
     code: String,
-    state: State<'_, DbState>,
+    state: State<'_, AppState>,
 ) -> Result<OtpResponse, String> {
-    let pool = &state.0;
+    let pool = &state.db;
     let now = Utc::now().naive_utc();
 
     let row = sqlx::query!(
@@ -200,7 +187,7 @@ pub async fn verify_password_reset_otp(
             OtpResponse { 
                 success: false, 
                 message: "Код не запрашивался".to_string(),
-                code: None 
+                ..Default::default()
             }
         ),
     };
@@ -224,7 +211,7 @@ pub async fn verify_password_reset_otp(
             OtpResponse { 
                 success: false, 
                 message: fail_string.unwrap(),
-                code: None 
+                ..Default::default()
             }
         );
     }
@@ -246,7 +233,8 @@ pub async fn verify_password_reset_otp(
         return Ok(OtpResponse { 
             success: true, 
             message: "Код подтвержден".to_string(),
-            code: Some(reset_token)
+            code: Some(reset_token),
+            auth_info: None
         }); 
     } else {
         sqlx::query("UPDATE otp_code SET attempts = attempts + 1 WHERE email = ?")
@@ -258,7 +246,7 @@ pub async fn verify_password_reset_otp(
         Ok(OtpResponse {
             success: false,
             message: "Неверный код подтверждения".to_string(),
-            code: None
+            ..Default::default()
         })
     }
 }
@@ -267,7 +255,7 @@ pub async fn verify_password_reset_otp(
 pub async fn update_user_password(
     code: String,
     new_password: String, 
-    db_state: tauri::State<'_, DbState>,
+    state: tauri::State<'_, AppState>,
 ) -> Result<String, String> {
    
     let decoded_bytes = BASE64_STANDARD.decode(code)
@@ -292,7 +280,7 @@ pub async fn update_user_password(
     }
 
 
-    let pool = &db_state.0;
+    let pool = &state.db;
     let argon2 = Argon2::default();
     
     let password_hash = argon2
@@ -311,20 +299,18 @@ pub async fn update_user_password(
     Ok("Пароль успешно изменен".to_string())
 }
 
-
-
 #[tauri::command]
 pub async fn check_user_password(
     id: String,
     passwd: String,
-    state: State<'_, DbState>,
+    state: State<'_, AppState>,
 ) -> Result<OtpResponse, String> {
     
     let row = sqlx::query!(
         "SELECT password_hash FROM user WHERE id = ?",
         id
     )
-    .fetch_optional(&state.0)
+    .fetch_optional(&state.db)
     .await
     .map_err(|e| format!("Database error: {e}"))?;
     
@@ -334,8 +320,7 @@ pub async fn check_user_password(
             return Ok(OtpResponse {
                 success: false,
                 message: "Пользователь не найден".to_string(),
-                code: None,
-                auth_info: None,
+                ..Default::default()
             })
         }
     };
@@ -348,7 +333,8 @@ pub async fn check_user_password(
 
             let token = Uuid::new_v4().to_string();
 
-            let expires_duration = Duration::days(14);
+            // let expires_duration = Duration::days(14);
+            let expires_duration = Duration::seconds(360);
             let expires_at_ms = (Utc::now() + expires_duration).timestamp_millis() as f64;
 
             sqlx::query!(
@@ -357,7 +343,7 @@ pub async fn check_user_password(
                 id,
                 expires_at_ms
             )
-            .execute(&state.0)
+            .execute(&state.db)
             .await
             .map_err(|e| format!("Failed to save auth token: {e}"))?;
 
@@ -365,7 +351,7 @@ pub async fn check_user_password(
                 success: true,
                 message: "Пароль верный".to_string(),
                 code: None,
-                auth_info: Some(UserSessionData {
+                auth_info: Some(SessionData {
                     user_id: id,
                     token,
                     expires_at: expires_at_ms,
@@ -375,18 +361,16 @@ pub async fn check_user_password(
         Err(_) => Ok(OtpResponse {
             success: false,
             message: "Неверный пароль".to_string(),
-            code: None,
-            auth_info: None,
+            ..Default::default()
         }),
     }
 }
 
-
 #[tauri::command]
 pub async fn verify_user_token(
     token: String,
-    state: State<'_, DbState>,
-) -> Result<Option<UserSessionData>, String> {
+    state: State<'_, AppState>,
+) -> Result<Option<SessionData>, String> {
     let now_ms = Utc::now().timestamp_millis() as f64;
 
     let row = sqlx::query!(
@@ -394,19 +378,19 @@ pub async fn verify_user_token(
         token,
         now_ms
     )
-    .fetch_optional(&state.0)
+    .fetch_optional(&state.db)
     .await
     .map_err(|e| format!("Database error: {e}"))?;
 
     match row {
-        Some(r) => Ok(Some(UserSessionData {
+        Some(r) => Ok(Some(SessionData {
             user_id: r.user_id,
             token,
             expires_at: r.expires_at,
         })),
         None => {
             let _ = sqlx::query!("DELETE FROM user_session WHERE token = ?", token)
-                .execute(&state.0)
+                .execute(&state.db)
                 .await;
             Ok(None)
         }

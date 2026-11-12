@@ -581,3 +581,34 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   width: 100%;
   box-sizing: border-box;
 }
+
+.auth-description {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  margin: 0;
+}
+
+input.otp-input {
+  text-align: center;
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: 0.35em;
+  padding-left: 1.25rem; /* Компенсация разрядки для точного центрирования */
+}
+
+.status-banner {
+  padding: 0.625rem 0.875rem;
+  border-radius: var(--radius-md);
+  border: var(--border-width) solid rgba(99, 102, 241, 0.3);
+  background-color: rgba(99, 102, 241, 0.1);
+  color: #a5b4fc;
+  font-size: 0.8125rem;
+  text-align: center;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.status-banner:empty {
+  display: none;
+}

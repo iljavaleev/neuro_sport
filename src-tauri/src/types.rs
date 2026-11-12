@@ -92,20 +92,17 @@ pub struct ExerciseStat {
     pub additional_metrics: Option<sqlx::types::Json<serde_json::Value>>, 
 }
 
-pub struct DbState(pub SqlitePool);
-
-
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-pub struct UserSessionData {
+pub struct SessionData {
     pub user_id: String,
     pub token: String,
     pub expires_at: f64,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Default)]
 pub struct OtpResponse {
     pub success: bool,
     pub message: String,
     pub code: Option<String>,
-    pub auth_info: Option<UserSessionData>,
+    pub auth_info: Option<SessionData>,
 }

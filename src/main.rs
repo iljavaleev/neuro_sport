@@ -28,7 +28,6 @@ pub fn AppLayout(children: ChildrenFn) -> impl IntoView {
             }
         }, std::time::Duration::from_secs(60));
 
-        // Очищаем таймер, если компонент будет размонтирован
         on_cleanup(move || {
             if let Ok(h) = handle {
                 h.clear();
@@ -49,13 +48,10 @@ pub fn AppLayout(children: ChildrenFn) -> impl IntoView {
 
 #[component]
 fn App() -> impl IntoView{
-    provide_context(AuthContext { session: RwSignal::new(None) });
-    
-    // spawn_local(async move {
-    //     if let Ok(Some(saved_session)) = invoke::<_, Option<SessionData>>("get_saved_session", ()).await {
-    //         auth.session.set(Some(saved_session));
-    //     }
-    // });
+    let context = AuthContext { session: RwSignal::new(None) };
+    context.try_auto_login();
+
+    provide_context(context);
     
     view! {
         <div class="app-container">
@@ -64,13 +60,11 @@ fn App() -> impl IntoView{
                 <main class="main-content">
                     <Routes fallback=|| "Not found.">
                         <Route path=path!("/register") view=Register/>
-                        <Route path=path!("/login") view=Login/>
-                        <Route path=path!("/logout") view=|| view! { <h1>"Log out here"</h1> }/>
-                        <Route path=path!("/*any") view=|| view! { <h1>"Not Found"</h1> }/>
+                        <Route path=path!("/login") view=Login/>    
                         <ParentRoute path=path!("")  view=|| view! { <AppLayout> <Outlet/> </AppLayout> }>
                             <Route path=path!("/") view=SoundTimerComponent/>
                         </ParentRoute>
-                        
+                        <Route path=path!("/*any") view=|| view! { <h1>"Not Found"</h1> }/>
                     </Routes>
                 </main>
             </Router>

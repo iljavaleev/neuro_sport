@@ -5,17 +5,16 @@ use leptos_router::NavigateOptions;
 
 use serde_wasm_bindgen::{from_value, to_value};
 use wasm_bindgen_futures::spawn_local;
-use log::{info, error}; 
+use leptos::logging::{error}; 
 use crate::auth::types::*;
-use crate::auth::utils::checker;
-
+use crate::auth::utils::{checker, invoke};
 
 
 #[component]
 pub fn Register() -> impl IntoView{
     let user_info = RwSignal::new(User::new());
     let passwords = RwSignal::new(Passw::default());
-    let err_str =  RwSignal::new(String::new());
+    let msg_str =  RwSignal::new(String::new());
 
     let navigate = use_navigate();
     let view_nav = navigate.clone();
@@ -23,7 +22,7 @@ pub fn Register() -> impl IntoView{
     let exit_button = move |_| {
         
         if passwords.with(|e| e.pass != e.pass2){
-            err_str.set("Пароли не совпадают".to_string());
+            msg_str.set("Пароли не совпадают".to_string());
             return;
         }
         user_info.update(|u| 
@@ -33,7 +32,7 @@ pub fn Register() -> impl IntoView{
         let mut has_error = false;
         user_info.with(|u| {
             if let Err(e) = u.check() {
-                err_str.set(e);
+                msg_str.set(e);
                 has_error = true;
             }
         });
@@ -52,7 +51,7 @@ pub fn Register() -> impl IntoView{
                 let err_msg: String = from_value(err)
                         .unwrap_or_else(|_| "Unknown backend error".to_string());
                 error!("{}", err_msg);
-                err_str.set(err_msg);
+                msg_str.set(err_msg);
             }}else{
                 navigate("/", NavigateOptions::default());
             }
@@ -145,7 +144,7 @@ pub fn Register() -> impl IntoView{
                 </div>
                     <div>
                         {move || {
-                            let error = err_str.get();
+                            let error = msg_str.get();
                             (!error.is_empty()).then(|| view! { 
                                 <div class="task-banner" style="margin-bottom: 1rem; border-color: rgba(239, 68, 68, 0.4); background-color: rgba(239, 68, 68, 0.1); color: #f87171;">
                                     <strong>"Ошибка: "</strong> {error}
@@ -175,14 +174,11 @@ pub fn CheckEmailView (
     #[prop(into)] 
     user_exists: RwSignal<bool>,
     ) -> impl IntoView{
-    let LoginContext{db_user, err_str} = use_context::<LoginContext>().expect("Context to be present");
+    let LoginContext{db_user, msg_str} = use_context::<LoginContext>().expect("Context to be present");
     let navigate = use_navigate();
 
     let continue_btn = move |_| {
         let email = db_user.with(|u| u.email.clone());
-        let user_exists = user_exists;
-        let err_str = err_str;
-
         
         spawn_local(async move {
             let payload = CheckUserEmailArg { email };
@@ -191,15 +187,18 @@ pub fn CheckEmailView (
             match invoke("check_user_exists", args).await{
                 Ok(js_result) => {
                     match from_value(js_result){
-                        Ok(user) => db_user.set(user),
-                        Err(_) => *err_str.write() = "Unknown backend error".to_string(),
+                        Ok(user) => {
+                            db_user.set(user)
+                        },
+                        Err(_) => *msg_str.write() = "Unknown backend error".to_string(),
                     }
-                    user_exists.set(true)
+                    user_exists.set(true);
+                    msg_str.set(String::new());
                 },
                 Err(js_error) => {
                     let err_msg: String = from_value(js_error)
                             .unwrap_or_else(|_| "Unknown backend error".to_string());
-                    err_str.set(err_msg);
+                    msg_str.set(err_msg);
                 }
             }
         });
@@ -226,7 +225,7 @@ pub fn CheckEmailView (
                 </div>
             
                 {move || {
-                    let error = err_str.get();
+                    let error = msg_str.get();
                     (!error.is_empty()).then(|| view! { 
                         <div class="task-banner" style="margin-bottom: 1rem; border-color: rgba(239, 68, 68, 0.4); background-color: rgba(239, 68, 68, 0.1); color: #f87171;">
                                 <strong>"Ошибка: "</strong> {error}
@@ -249,7 +248,6 @@ pub fn CheckEmailView (
     
 }
 
-// написать хэндлеры
 #[component]
 pub fn UpdatePasswDbView(
     #[prop(into)] 
@@ -259,21 +257,20 @@ pub fn UpdatePasswDbView(
     #[prop(into)]
     otp_verified: RwSignal<bool>
     ) -> impl IntoView{
-    let new_pass = RwSignal::new(Passw::default());
-    let LoginContext{db_user: _, err_str} 
+    let LoginContext{db_user: _, msg_str} 
         = use_context::<LoginContext>().expect("Context to be present");
 
     if !frontend_code_for_otp.get().is_some(){
-        err_str.update(|e| *e = "Ошибка верификации".to_string() );
+        msg_str.update(|e| *e = "Ошибка верификации".to_string() );
         otp_verified.update(|v| *v = false );
     }
 
+    let new_pass = RwSignal::new(Passw::default());
     let submit_update_pass = move |_| {
-        let err_str = err_str;
         let passwd = new_pass.with(|p| p.pass.clone());
         
         if let Err(err) = checker::check_password(&passwd) {
-            err_str.update(|e| *e = err); 
+            msg_str.update(|e| *e = err); 
             return
         }
 
@@ -286,12 +283,14 @@ pub fn UpdatePasswDbView(
             if let Ok(args) = to_value(&payload) {
                 match invoke("update_user_password", args).await {
                     Ok(_) => {
-                        forgot_passwd.update(|p| *p = false)
+                        // успешно обновлен
+                        forgot_passwd.update(|p| *p = false);
+                        msg_str.set(String::new());
                     },
                     Err(js_error) => {
                         let err_msg = serde_wasm_bindgen::from_value(js_error)
                             .unwrap_or_else(|_| "Unknown backend error".to_string());
-                        err_str.set(err_msg);
+                        msg_str.set(err_msg);
                     }
                 }
             }
@@ -329,7 +328,7 @@ pub fn UpdatePasswDbView(
                 </div>
                 <div class="form-footer-actions">
                     {move || {
-                        let error = err_str.get();
+                        let error = msg_str.get();
                         (!error.is_empty()).then(|| view! { 
                             <div class="task-banner" style="margin-bottom: 1rem; border-color: rgba(239, 68, 68, 0.4); background-color: rgba(239, 68, 68, 0.1); color: #f87171; width: 100%; text-align: center;">
                                 <strong>"Ошибка: "</strong> {error}
@@ -338,14 +337,14 @@ pub fn UpdatePasswDbView(
                     }}
                     
                     <button class="btn-primary" on:click=submit_update_pass>
-                        "Сохранить и войти"
+                        "Сохранить"
                     </button>
 
                     <button 
                         class="action-link" 
                         on:click=move |_| forgot_passwd.update(|p| *p = false)
                     >
-                        "назад?"
+                        "назад"
                     </button>
                 </div>
             </div>
@@ -358,14 +357,40 @@ pub fn UpdatePasswDbView(
 pub fn CheckPasswDbView(
     #[prop(into)] 
     forgot_passwd: RwSignal<bool>) -> impl IntoView{
-    let LoginContext{db_user, err_str} = use_context::<LoginContext>().expect("Context to be present");
+    let LoginContext{db_user, msg_str} 
+        = use_context::<LoginContext>().expect("Context to be present");
+    let auth_context = use_context::<AuthContext>()
+        .expect("Context to be present");
+    
+    let nav = use_navigate();
 
     let password = RwSignal::new(String::new());
-    let submit_check_pass = move |_| {
-        let id = db_user.with(|u| u.id.clone());
-        let password = password;
-        let err_str = err_str;
+    
+    let clear_timer = StoredValue::new(None::<TimeoutHandle>);
 
+    let show_temp_error = move |text: String| {
+        if let Some(handle) = clear_timer.get_value() {
+            handle.clear();
+        }
+        
+        msg_str.set(text);
+        
+        if let Ok(handle) = set_timeout_with_handle(
+            move || {
+                msg_str.set(String::new());
+                clear_timer.set_value(None);
+            },
+            std::time::Duration::from_secs(2),
+        ) {
+            clear_timer.set_value(Some(handle));
+        }
+    };
+    
+    
+    
+    let submit_check_pass = move |_| {
+        let navigate = nav.clone();
+        let id = db_user.with(|u| u.id.clone());
         
         spawn_local(async move {
             let payload = CheckUserPasswArg {
@@ -378,13 +403,22 @@ pub fn CheckPasswDbView(
                     Ok(res_js) => {
                         let res: OtpJsResponse = serde_wasm_bindgen::from_value(res_js).unwrap();
                         if res.success{
-                            // todo login and to main
+                            let session = res.auth_info.unwrap();
+                            auth_context.login(session);
+                            msg_str.set(String::new());
+                            navigate("/", NavigateOptions::default());
+                        }else{
+                            show_temp_error(res.message);
                         }
+
                     },
                     Err(js_error) => {
-                        let err_msg = serde_wasm_bindgen::from_value(js_error)
-                            .unwrap_or_else(|_| "Unknown backend error".to_string());
-                        err_str.set(err_msg);
+                        let err_msg = serde_wasm_bindgen::from_value::<String>(js_error)
+                            .unwrap_or_else(|e| format!("Failed to deserialize backend error: {e:?}"));
+                        
+                        leptos::logging::error!("Ошибка при проверке пароля: {}", err_msg);
+                        
+                        show_temp_error("У нас что-то сломалось. Попробуйте позже.".to_string());
                     }
                 }
             }
@@ -413,7 +447,7 @@ pub fn CheckPasswDbView(
                 
                 <div class="form-footer-actions">
                     {move || {
-                        let error = err_str.get();
+                        let error = msg_str.get();
                         (!error.is_empty()).then(|| view! { 
                             <div class="text-red-500 font-bold bg-red-100 p-2 rounded">
                                 {error}
@@ -455,7 +489,8 @@ pub fn CheckPasswView() -> impl IntoView{
                 when=move || otp_verified.get()
                 fallback={
                     move || view! { 
-                        <ForgotPasswordView 
+                        <ForgotPasswordView
+                            forgot_passwd=forgot_passwd
                             otp_verified=otp_verified
                             frontend_code_for_otp=frontend_code_for_otp 
                         /> 
@@ -479,7 +514,7 @@ pub fn Login() -> impl IntoView{
     
     provide_context(LoginContext{
         db_user: RwSignal::new(UserResponse::default()),
-        err_str: RwSignal::new(String::default())
+        msg_str: RwSignal::new(String::default())
     });
     
     view! {
@@ -497,21 +532,20 @@ pub fn Login() -> impl IntoView{
 #[component]
 pub fn ForgotPasswordView(
     #[prop(into)] 
+    forgot_passwd: RwSignal<bool>,
+    #[prop(into)] 
     otp_verified: RwSignal<bool>,
     #[prop(into)] 
     frontend_code_for_otp: RwSignal<Option<String>>
 ) -> impl IntoView {
     
-    let LoginContext{db_user, err_str} 
+    let LoginContext{db_user, msg_str} 
         = use_context::<LoginContext>().expect("Context to be present");
    
 
     let code = RwSignal::new(String::new());
-    let message = RwSignal::new(String::new());
     let code_sent = RwSignal::new(false);
-
     let verified_email = db_user.with(|u| u.email.clone());
-
     let email_current = verified_email.clone();
     let email_for_verify = verified_email.clone();
 
@@ -527,7 +561,7 @@ pub fn ForgotPasswordView(
                 OtpJsResponse { 
                     success: false, 
                     message: "Ошибка связи с бэкендом".to_string(),
-                    code: None 
+                    ..Default::default()
                 }
             }
         }
@@ -535,10 +569,10 @@ pub fn ForgotPasswordView(
 
 
     let verify_otp_action = Action::new_local(move |(email_str, code_val): &(String, String)| {
-        let e = email_str.clone();
-        let c = code_val.clone();
+        let email = email_str.clone();
+        let code = code_val.clone();
         async move {
-            let args = serde_wasm_bindgen::to_value(&VerifyArgs { email: e, code: c }).unwrap();
+            let args = serde_wasm_bindgen::to_value(&VerifyArgs { email, code }).unwrap();
             if let Ok(res_js) = invoke("verify_password_reset_otp", args).await {
                 let res: OtpJsResponse = serde_wasm_bindgen::from_value(res_js).unwrap();
                 res
@@ -546,7 +580,7 @@ pub fn ForgotPasswordView(
                 OtpJsResponse { 
                     success: false, 
                     message: "Ошибка верификации".to_string(),
-                    code: None
+                    ..Default::default()
                 }
             }
         }
@@ -556,7 +590,7 @@ pub fn ForgotPasswordView(
     Effect::new(move |_| {
         request_otp_action.value().with(|val| {
             if let Some(res) = val {
-                message.set(res.message.clone());
+                msg_str.set(res.message.clone());
                 if res.success {
                     code_sent.set(true);
                 }
@@ -567,12 +601,12 @@ pub fn ForgotPasswordView(
     Effect::new(move |_| {
         verify_otp_action.value().with(|val| {
             if let Some(res) = val {
-                message.set(res.message.clone());
                 if res.success{
                     frontend_code_for_otp.update(|c| *c = res.code.clone());
                     otp_verified.update(|v| *v = true );
+                    msg_str.set(String::new());
                 }else {
-                    err_str.update(|e| *e = res.message.clone() )
+                    msg_str.update(|e| *e = res.message.clone() )
                 }
             }
         });
@@ -581,10 +615,12 @@ pub fn ForgotPasswordView(
     let is_loading = move || request_otp_action.pending().get() || verify_otp_action.pending().get();
 
     view! {
-        <div style="padding: 2rem; max-width: 25rem; margin: 0 auto; font-size: 1rem;">
+        <main class="main-content auth-page">
+            <div class="auth-top-wrapper">
+                <div class="panel-card auth-card" style="width: 100%; max-width: 27.5rem;">
             <h2>"Восстановление доступа"</h2>
             
-            <p style="color: #555; font-size: 0.9rem; margin-bottom: 1.5rem;">
+            <p class="auth-description" style="margin-bottom: 1.5rem;">
                 {move || if code_sent.get() { 
                     format!("Код отправлен на {}", verified_email) 
                 } else { 
@@ -597,12 +633,18 @@ pub fn ForgotPasswordView(
                 fallback=move || {
                     let email_current = email_current.clone();
                     view! {
-                        <div style="display: flex; flex-direction: column; gap: 0.8rem;">
+                        <div class="form-footer-actions">
                             <button 
-                                style="padding: 0.7rem; font-size: 1rem; background-color: #0076ff; color: white; border: none; border-radius: 0.25rem; cursor: pointer;"
+                                class="btn-primary"
                                 prop:disabled=is_loading
                                 on:click=move |_| { request_otp_action.dispatch(email_current.clone()); }>
                                 {move || if request_otp_action.pending().get() { "Отправка кода..." } else { "Получить код восстановления" }}
+                            </button>
+                            <button 
+                                class="action-link" 
+                                on:click=move |_| forgot_passwd.update(|p| *p = false)
+                            >
+                                "назад"
                             </button>
                         </div>
                     }
@@ -611,30 +653,39 @@ pub fn ForgotPasswordView(
                 {
                     let email_for_verify = email_for_verify.clone();
                     view! {
-                        <div style="display: flex; flex-direction: column; gap: 0.8rem;">
+                       <div class="form-group" style="margin-bottom: 1.5rem;">
                             <input 
                                 type="text" 
                                 placeholder="000000"
                                 maxlength="6"
-                                style="padding: 0.6rem; font-size: 1.2rem; text-align: center; letter-spacing: 0.3rem; border-radius: 0.25rem; border: 0.05rem solid #ccc;"
+                                class="otp-input"
                                 on:input=move |ev| code.set(event_target_value(&ev))
                                 prop:value=code
                                 prop:disabled=is_loading
                             />
-                            <button 
-                                style="padding: 0.7rem; font-size: 1rem; background-color: #34c759; color: white; border: none; border-radius: 0.25rem; cursor: pointer;"
-                                prop:disabled=is_loading
-                                on:click=move |_| { verify_otp_action.dispatch((email_for_verify.clone(), code.get())); }>
-                                {move || if verify_otp_action.pending().get() { "Проверка..." } else { "Подтвердить код" }}
-                            </button>
+                            <div class="form-footer-actions">
+                                <button 
+                                    class="btn-primary"
+                                    prop:disabled=is_loading
+                                    on:click=move |_| { verify_otp_action.dispatch((email_for_verify.clone(), code.get())); }>
+                                    {move || if verify_otp_action.pending().get() { "Проверка..." } else { "Подтвердить код" }}
+                                </button>
+                            </div>
                         </div>
                     }
                 }
             </Show>
 
-            <p style="margin-top: 1rem; color: #d10000; font-size: 0.85rem; text-align: center;">
-                {move || message.get()}
-            </p>
+            {move || {
+                let msg = msg_str.get();
+                (!msg.trim().is_empty()).then(|| view! {
+                    <div class="status-banner" style="margin-top: 1rem;">
+                        {msg}
+                    </div>
+                })
+            }}
         </div>
+        </div>
+        </main>
     }
 }
