@@ -4,6 +4,8 @@ use regex::Regex;
 use chrono::{Local, NaiveDate, Datelike};
 use wasm_bindgen::prelude::wasm_bindgen;
 use wasm_bindgen::JsValue;
+use leptos::{prelude::*};
+use leptos_icons::Icon;
 
 
 #[wasm_bindgen]
@@ -12,9 +14,37 @@ extern "C" {
     pub async fn invoke(cmd: &str, args: JsValue) -> Result<JsValue, JsValue>;
 }
 
+
+#[component]
+pub fn UnhiddenPassword(password: RwSignal<String>) -> impl IntoView{
+    let show_password = RwSignal::new(false);
+    view!{
+        <div class="password-input-wrapper">
+            <input 
+                type=move || if show_password.get() { "text" } else { "password" }
+                prop:value=move || password.get()
+                on:input:target=move |ev| {
+                    password.update(|v| *v = ev.target().value());
+                }
+            />
+            <button
+                type="button"
+                class="password-toggle-btn"
+                on:click=move |_| show_password.update(|s| *s = !*s)
+            >
+                {move || if show_password.get(){
+                    view! { <Icon icon=icondata::BsEyeSlash style="width: 1.25em; height: 1.25em;" /> }.into_any()
+                } else {
+                    view! { <Icon icon=icondata::BsEye style="width: 1.25em; height: 1.25em;" /> }.into_any()
+                }}
+            </button>
+        </div>
+    }
+}
+
 pub mod checker{
     use super::*;
-    pub fn check_password(password: &String) -> Result<(), String>{
+    pub fn check_password(password: &str) -> Result<(), String>{
             
         if password.len() < 8 {
             return Err("Пароль должен быть не менее 8 символов в длину".to_string());
@@ -69,7 +99,7 @@ pub mod checker{
         Ok(())
     }
 
-    pub fn check_email(email: &String) -> Result<(), String>{
+    pub fn check_email(email: &str) -> Result<(), String>{
         if email.trim().is_empty() {
             return Err("Email не может быть пустым".to_string());
         }
@@ -78,7 +108,7 @@ pub mod checker{
             Regex::new(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$").unwrap()
         });
 
-        if !EMAIL_REGEX.is_match(email.as_str()) {
+        if !EMAIL_REGEX.is_match(email) {
             return Err("Некорректный формат Email адреса".to_string());
         }
         

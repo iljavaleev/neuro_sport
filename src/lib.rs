@@ -1,4 +1,4 @@
 pub mod navbar;
-pub mod sounds;
-pub mod timer;
+pub mod reaction;
 pub mod auth;
+pub mod main_page;

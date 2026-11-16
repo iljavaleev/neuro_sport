@@ -1,59 +1,9 @@
 use leptos::{prelude::*};
-use serde::{Deserialize, Serialize};
-
-use crate::timer::SoundTimer;
+use crate::reaction::SoundTimer;
+use crate::reaction::types::{SoundButton, TimerContext, UserOptions};
 use leptos_icons::{Icon};
-
 use std::sync::LazyLock;
-
-use icondata::Icon; 
-#[derive(Clone)]
-pub struct SoundButton {
-    pub icon: &'static Icon,
-    pub style: &'static str,
-    pub path: String,
-}
-
-impl PartialEq for SoundButton {
-    fn eq(&self, other: &SoundButton) -> bool { 
-        self.icon == other.icon && self.path == other.path 
-    }
-}
-
-impl Eq for SoundButton {}
-
-#[derive(Debug, Clone, Deserialize, Serialize)] 
-pub struct UserOptions{
-    pub sounds: Vec<String>,
-    pub round_count: i64,
-    pub prepare_time: i64,
-    pub round_time: i64,
-    pub on_touch: i64,
-    pub rest_time: i64,
-    pub signal_variants: Option<i32>,
-    pub signal_freq: f64,
-}
-
-impl UserOptions {
-    fn new()-> Self {
-        Self {
-            sounds: Vec::<String>::new(),
-            prepare_time: 5,
-            round_count: 1, // если один раунд, то отдых не нужен
-            round_time: 60,
-            on_touch: 0,
-            rest_time: 10,
-            signal_variants: Some(0),
-            signal_freq: 3.0,
-        }
-    }
-}
-
-#[derive(Clone)]
-pub struct TimerContext {
-    pub user_options: UserOptions,
-    pub view_timer: bool,
-}
+use std::collections::HashSet;
 
 
 static DIRECTIONS_SOUNDS: LazyLock<Vec<SoundButton>> = LazyLock::new(|| {
@@ -81,9 +31,8 @@ static COLORS_SOUNDS: LazyLock<Vec<SoundButton>> = LazyLock::new(|| {
     ]
 });
 
-
 #[component]
-pub fn sound_timer_component() -> impl IntoView{
+pub fn SoundTimerComponent() -> impl IntoView{
     let timer_context = TimerContext{
         user_options: UserOptions::new(),
         view_timer: false,
@@ -106,72 +55,36 @@ pub fn sound_timer_component() -> impl IntoView{
 
 
 #[component]
-pub fn sounds() -> impl IntoView{
-    let timer_context = use_context::<RwSignal<TimerContext>>().expect("To find the count signal in context");
+pub fn Sounds() -> impl IntoView {
+     let timer_context = use_context::<RwSignal<TimerContext>>()
+        .expect("To find the count signal in context");
 
     let (category, set_category) = signal(0);
     
-    let initial_choices = COLORS_SOUNDS
-            .iter()
-            .map(|btn| (btn.path.clone(), 
-                btn.icon.clone(),
-                btn.style, 
-                ArcRwSignal::new(false)))
-            .collect::<Vec<_>>();
-    
-    let (choices, 
-        set_choices) = signal(initial_choices);
+    let selected_paths = RwSignal::new(HashSet::<String>::new());
 
-    let choice_vector = move || {
-        let init = if category.get() == 0{
-            COLORS_SOUNDS.clone()
-        }else{
-            DIRECTIONS_SOUNDS.clone()
-        };
-
-        set_choices.update(move |vec| *vec = 
-            init.iter()
-            .map(|btn| (btn.path.clone(), 
-                btn.icon.clone(),
-                btn.style, 
-                ArcRwSignal::new(false)))
-            .collect::<Vec<_>>());
-
-        view!{
-            <div class="choice-pill-container">
-                <For
-                    each=move || choices.get()
-                    key=|choices| choices.clone()
-                    children=move |(id, icon, style, pushed)| {
-                        let pushed = RwSignal::from(pushed);
-                        view! {
-                            <div>
-                                <button id=id
-                                    class="choice-pill"
-                                    class:chosen=move || pushed.get()
-                                    on:click=move |_| *pushed.write() = !pushed.get()
-                                >
-                                    <Icon icon=icon style=format!("width: 3em; height: 3em; color: {}", style) />
-                                </button>
-                            </div>
-                        }
-                    }
-                />
-            </div>
+    let current_buttons = move || {
+        if category.get() == 0 {
+            COLORS_SOUNDS.as_slice()
+        } else {
+            DIRECTIONS_SOUNDS.as_slice()
         }
     };
 
 
-    view!{
+    view! {
         <div class="settings-grid">
             <div class="panel-card">
-                <p class="section-title">Задайте звуковые параметры</p>
+                <p class="section-title">"Задайте звуковые параметры"</p>
                 <div class="form-group">
                     <label>"Выберите категорию сигнала:"</label>
                     <select
                         class="select"
                         on:change:target=move |ev| {
-                            set_category.set(ev.target().value().parse().unwrap());
+                            if let Ok(val) = ev.target().value().parse::<i32>() {
+                                set_category.set(val);
+                                selected_paths.update(|set| set.clear());
+                            }
                         }
                         prop:value=move || category.get()
                     >
@@ -179,26 +92,55 @@ pub fn sounds() -> impl IntoView{
                         <option value=1>"Направления"</option>
                     </select>
                 </div>
-                <div class="form-group">
+
+                 <div class="form-group">
                     <label>"Выбор звукового стимула:"</label>
-                    <div class="color-pill-container">
-                        {move || choice_vector}
+                    <div class="choice-pill-container">
+                        <For
+                            each=move || current_buttons().iter()
+                            key=|btn| btn.path.as_str()
+                            children=move |btn| {
+                                let path_for_class = btn.path.clone();
+                                let path_for_click = btn.path.clone();
+
+                                view! {
+                                    <div>
+                                        <button
+                                            id=btn.path.clone()
+                                            type="button"
+                                            class="choice-pill"
+                                            class:chosen=move || {
+                                                selected_paths.with(|set| set.contains(&path_for_class))
+                                            }
+                                            on:click=move |_| {
+                                                selected_paths.update(|set| {
+                                                    if !set.remove(&path_for_click) {
+                                                        set.insert(path_for_click.clone());
+                                                    }
+                                                });
+                                            }
+                                        >
+                                            <Icon icon=*btn.icon style=btn.style />
+                                        </button>
+                                    </div>
+                                }
+                            }
+                        />
                     </div>
                 </div>
             </div>
+
             <div class="panel-card"> 
-                <p class="section-title">Задайте временные параметры</p>
+                <p class="section-title">"Задайте временные параметры"</p>
                 <div class="input-row-three">
                     <div class="form-group">
                         <label>"Время на подготовку"</label>
                         <input 
                             type="number"
-
-                            prop:value=move || (*timer_context.read()).user_options.prepare_time
-                            
+                            prop:value=move || timer_context.read().user_options.prepare_time
                             on:input:target=move |ev| {
-                                (*timer_context.write()).user_options.prepare_time = 
-                                ev.target().value().parse::<i64>().unwrap_or(0);
+                                timer_context.write().user_options.prepare_time = 
+                                    ev.target().value().parse::<i64>().unwrap_or(0);
                             }
                         />
                     </div>
@@ -206,68 +148,65 @@ pub fn sounds() -> impl IntoView{
                         <label>"Количество раундов"</label>
                         <input 
                             type="number"
-                            
-                            prop:value=move || (*timer_context.read()).user_options.round_count
-
+                            prop:value=move || timer_context.read().user_options.round_count
                             on:input:target=move |ev| {
-                                (*timer_context.write()).user_options.round_count = 
-                                ev.target().value().parse::<i64>().unwrap_or(0);
+                                timer_context.write().user_options.round_count = 
+                                    ev.target().value().parse::<i64>().unwrap_or(0);
                             }
-                            
                         />
                     </div>
                     <div class="form-group">
                         <label>"Длительность раунда"</label>
                         <input 
                             type="number"
-
-                            prop:value=move || (*timer_context.read()).user_options.round_time
-                            
+                            prop:value=move || timer_context.read().user_options.round_time
                             on:input:target=move |ev| {
-                                (*timer_context.write()).user_options.round_time = 
-                                ev.target().value().parse::<i64>().unwrap_or(0);
+                                timer_context.write().user_options.round_time = 
+                                    ev.target().value().parse::<i64>().unwrap_or(0);
                             }
                         />
                     </div>
                 </div>
+
                 <div class="input-row-two">
                     <div class="form-group">
                         <label>"Отдых между раундами"</label>
                         <input 
                             type="number"
-
-                            prop:value=move || (*timer_context.read()).user_options.rest_time
-                            
+                            prop:value=move || timer_context.read().user_options.rest_time
                             on:input:target=move |ev| {
-                                (*timer_context.write()).user_options.rest_time = 
-                                ev.target().value().parse::<i64>().unwrap_or(0);
+                                timer_context.write().user_options.rest_time = 
+                                    ev.target().value().parse::<i64>().unwrap_or(0);
                             }
                         />
                     </div>
                     
                     <div class="form-group">
                         <label>"Пауза между сигналами"</label>
-                            <input type="number" step="0.1" placeholder="3.0"
-                                on:input:target=move |ev| {
-                                    (*timer_context.write()).user_options.signal_freq = 
-                                    ev.target().value().parse::<f64>().unwrap();
-
-                                }
-                                prop:value=timer_context.get_untracked().user_options.signal_freq
-                            />
+                        <input 
+                            type="number" 
+                            step="0.1" 
+                            placeholder="3.0"
+                            prop:value=move || timer_context.read().user_options.signal_freq
+                            on:input:target=move |ev| {
+                                // Заменили .unwrap() на безопасный .unwrap_or(0.0)
+                                timer_context.write().user_options.signal_freq = 
+                                    ev.target().value().parse::<f64>().unwrap_or(0.0);
+                            }
+                        />
                     </div>
                 </div>
+
                 <div class="input-row-two">               
                     <div class="form-group checkbox-container">
-                         <label class="checkbox-label">
+                        <label class="checkbox-label">
                             <input
                                 type="checkbox"
                                 class="checkbox"
-                                prop:checked=move || (*timer_context.read()).user_options.on_touch == 1
-
+                                prop:checked=move || timer_context.read().user_options.on_touch == 1
                                 on:change:target=move |ev| {
                                     let is_checked = ev.target().checked();
-                                    (*timer_context.write()).user_options.on_touch = if is_checked { 1 } else { 0 };
+                                    timer_context.write().user_options.on_touch = if is_checked { 1 } else { 0 };
                                 }
                             />
                             "С касанием"
@@ -278,11 +217,10 @@ pub fn sounds() -> impl IntoView{
                             <input
                                 type="checkbox"
                                 class="checkbox"
-                                prop:checked=move || (*timer_context.read()).user_options.signal_variants == Some(1)
-
+                                prop:checked=move || timer_context.read().user_options.signal_variants == Some(1)
                                 on:change:target=move |ev| {
                                     let is_checked = ev.target().checked();
-                                    (*timer_context.write()).user_options.signal_variants = 
+                                    timer_context.write().user_options.signal_variants = 
                                         Some(if is_checked { 1 } else { 0 });
                                 }
                             />
@@ -293,20 +231,23 @@ pub fn sounds() -> impl IntoView{
             </div>
         </div>
         <div class="footer-actions">
-            <button class="btn-primary" on:click=move |_| {
-                (*timer_context.write()).user_options.sounds = choices
-                    .read()
-                    .iter()
-                    .filter(|(_, _, _, signal)|{signal.read() == true})
-                    .map(|(path, _, _, _)| path)
-                    .cloned()
-                    .collect();
-                (*timer_context.write()).view_timer = true;             
-            }>
-                <p>"Начать"</p>
+            <button 
+                type="button"
+                class="btn-primary" 
+                on:click=move |_| {
+                    let sounds: Vec<String> = selected_paths.with_untracked(|set| {
+                        set.iter().cloned().collect()
+                    });
+
+                    timer_context.update(|ctx| {
+                        ctx.user_options.sounds = sounds;
+                        ctx.view_timer = true;
+                    });
+                }
+            >
+                "Начать"
             </button>
         </div>
-        
-    }
+     
 }
-
+}

@@ -145,26 +145,14 @@ impl User {
     }
 
     pub fn check(&self) -> Result<(), String>{
-        if let Err(err) = self.check_password() {
-            return Err(err);
-        }
-        if let Err(err) = self.check_email() {
-            return Err(err);
-        }
-        if let Err(err) = self.check_date_of_birth() {
-            return Err(err);
-        }
+        self.check_password()?;
+        self.check_email()?;
+        self.check_date_of_birth()?;
 
         Ok(())
     }
 }
 
-
-#[derive(Default)]
-pub struct Passw{
-    pub pass: String,
-    pub pass2: String
-}
 
 #[derive(Serialize)]
 pub struct CreateUserArg {
