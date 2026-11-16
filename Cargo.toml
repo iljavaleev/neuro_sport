@@ -14,19 +14,13 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1.0"
 serde-wasm-bindgen = "0.6"
 console_error_panic_hook = "0.1.7"
-console_log = "1.1.0"
 log = "0.4.34"
-rand = "0.10.0"
-
-getrandom = { version = "0.4.3", features = ["wasm_js"] }
-getrandom_v2 = { package = "getrandom", version = "0.2", features = ["js"] }
 
 leptos_icons = "0.7.1"
 icondata = "0.7.0"
 futures = "0.3"
 chrono = { version = "0.4", features = ["serde"] }
 regex = "1.10"
-bcrypt = "0.15"
 
 [workspace]
 members = ["src-tauri"]
@@ -49,3 +43,6 @@ features = [
   "MouseEvent",
   "Storage",
 ]
+
+[target.aarch64-linux-android]
+linker = "/Users/iljavaleev/Library/Android/sdk/ndk/30.0.16248370/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android26-clang"

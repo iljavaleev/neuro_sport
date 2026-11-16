@@ -1,19 +1,20 @@
 use leptos::{prelude::*};
 use chrono::{NaiveDate};
-use leptos_router::hooks::use_navigate;
+use leptos_router::hooks::{use_navigate, use_query_map};
 use leptos_router::NavigateOptions;
 
 use serde_wasm_bindgen::{from_value, to_value};
 use wasm_bindgen_futures::spawn_local;
 use leptos::logging::{error}; 
 use crate::auth::types::*;
-use crate::auth::utils::{checker, invoke};
+use crate::auth::utils::{UnhiddenPassword, checker, invoke};
 
 
 #[component]
 pub fn Register() -> impl IntoView{
     let user_info = RwSignal::new(User::new());
-    let passwords = RwSignal::new(Passw::default());
+    let password1 = RwSignal::new(String::new());
+    let password2 = RwSignal::new(String::new());
     let msg_str =  RwSignal::new(String::new());
 
     let navigate = use_navigate();
@@ -21,12 +22,12 @@ pub fn Register() -> impl IntoView{
     
     let exit_button = move |_| {
         
-        if passwords.with(|e| e.pass != e.pass2){
+        if password1.with(|p| *p != password2.get()){
             msg_str.set("Пароли не совпадают".to_string());
             return;
         }
         user_info.update(|u| 
-            u.password = passwords.with(|p| p.pass.clone())
+            u.password = password1.get()
         );
 
         let mut has_error = false;
@@ -41,10 +42,15 @@ pub fn Register() -> impl IntoView{
             return;
         }
         let navigate = use_navigate();
+        let query_map = use_query_map();
 
         spawn_local(async move {
             let payload = CreateUserArg { user: user_info.get() };
             let args = to_value(&payload).unwrap();
+
+            let redirect_target = query_map.with_untracked(|params| {
+                params.get("redirect").unwrap_or_else(|| "/".to_string())
+            });
             
             if let Err(err) = invoke("create_user", args).await{
             {
@@ -53,10 +59,12 @@ pub fn Register() -> impl IntoView{
                 error!("{}", err_msg);
                 msg_str.set(err_msg);
             }}else{
-                navigate("/", NavigateOptions::default());
+                navigate(&redirect_target, NavigateOptions::default());
             }
         });
     };
+
+
 
     view!{
         <main class="main-content auth-page">
@@ -78,29 +86,11 @@ pub fn Register() -> impl IntoView{
                 </div>
                 <div class="form-group">
                     <label>"Пароль"</label>
-                    <input 
-                        type="password"
-
-                        prop:value=move || (*passwords.read()).pass.clone()
-                        
-                        on:input:target=move |ev| {
-                            (*passwords.write()).pass = 
-                            ev.target().value().parse().unwrap();
-                        }
-                    />
+                    <UnhiddenPassword password=password1 />
                 </div>
                 <div class="form-group">
                     <label>"Повторите пароль"</label>
-                    <input 
-                        type="password"
-
-                        prop:value=move || (*passwords.read()).pass2.clone()
-                        
-                        on:input:target=move |ev| {
-                            (*passwords.write()).pass2 = 
-                            ev.target().value().parse().unwrap();
-                        }
-                    />
+                   <UnhiddenPassword password=password2 />
                 </div>
 
                 <div class="input-row-two">
@@ -135,7 +125,7 @@ pub fn Register() -> impl IntoView{
                                 on:change:target=move |ev| {
                                     (*user_info.write()).sex = ev.target().value().parse().unwrap()
                                 }
-                                prop:value=move || (*user_info.read()).sex.clone()
+                                prop:value=move || user_info.read().sex.clone()
                             >
                                 <option value="M">"М"</option>
                                 <option value="W">"Ж"</option>
@@ -163,7 +153,7 @@ pub fn Register() -> impl IntoView{
                     </div>
                 </div>
             
-        </div>
+            </div>
         </main>
     }
 
@@ -176,6 +166,16 @@ pub fn CheckEmailView (
     ) -> impl IntoView{
     let LoginContext{db_user, msg_str} = use_context::<LoginContext>().expect("Context to be present");
     let navigate = use_navigate();
+    let query_map = use_query_map();
+
+    let nav_to_register = move |_| {
+        let redirect = query_map.with_untracked(|p| p.get("redirect"));
+        let target = match redirect {
+            Some(path) => format!("/register?redirect={}", path),
+            None => "/register".to_string(),
+        };
+        navigate(&target, NavigateOptions::default());
+    };
 
     let continue_btn = move |_| {
         let email = db_user.with(|u| u.email.clone());
@@ -237,7 +237,7 @@ pub fn CheckEmailView (
                         "Продолжить"
                     </button>
                     
-                    <button class="action-link" on:click=move |_| navigate("/register", NavigateOptions::default())>
+                    <button class="action-link" on:click=nav_to_register>
                         "создать аккаунт?"
                     </button>
                 </div>
@@ -265,9 +265,11 @@ pub fn UpdatePasswDbView(
         otp_verified.update(|v| *v = false );
     }
 
-    let new_pass = RwSignal::new(Passw::default());
+    let new_pass = RwSignal::new(String::new());
+    let new_pass2 = RwSignal::new(String::new());
+
     let submit_update_pass = move |_| {
-        let passwd = new_pass.with(|p| p.pass.clone());
+        let passwd = new_pass.get();
         
         if let Err(err) = checker::check_password(&passwd) {
             msg_str.update(|e| *e = err); 
@@ -302,29 +304,13 @@ pub fn UpdatePasswDbView(
         <div class="auth-top-wrapper">
             <div class="panel-card auth-card" style="width: 100%; max-width: 440px;">
                 <h2>"Сброс пароля"</h2>
-                <div class="form-group" style="margin-bottom: 1rem;">
-                    <label class="form-label">"Введите новый пароль"</label>
-                    <input 
-                        type="text"
-
-                        prop:value=move || (*new_pass.read()).pass.clone()
-                        
-                        on:input:target=move |ev| {
-                            new_pass.update(|p| p.pass = ev.target().value());
-                        }
-                    />
+                 <div class="form-group">
+                    <label>"Пароль"</label>
+                    <UnhiddenPassword password=new_pass />
                 </div>
-                <div class="form-group" style="margin-bottom: 1.5rem;">
-                    <label class="form-label">"Подтвердите пароль"</label>
-                    <input 
-                        type="text"
-
-                        prop:value=move || (*new_pass.read()).pass2.clone()
-                        
-                        on:input:target=move |ev| {
-                            new_pass.update(|p| p.pass2 = ev.target().value());
-                        }
-                    />
+                <div class="form-group">
+                    <label>"Повторите пароль"</label>
+                   <UnhiddenPassword password=new_pass2 />
                 </div>
                 <div class="form-footer-actions">
                     {move || {
@@ -363,6 +349,7 @@ pub fn CheckPasswDbView(
         .expect("Context to be present");
     
     let nav = use_navigate();
+    let query_map = use_query_map();
 
     let password = RwSignal::new(String::new());
     
@@ -397,6 +384,9 @@ pub fn CheckPasswDbView(
                 id,
                 passwd: password.get_untracked(), 
             };
+            let redirect_target = query_map.with_untracked(|params| {
+                params.get("redirect").unwrap_or_else(|| "/".to_string())
+            });
             
             if let Ok(args) = to_value(&payload) {
                 match invoke("check_user_password", args).await {
@@ -406,7 +396,7 @@ pub fn CheckPasswDbView(
                             let session = res.auth_info.unwrap();
                             auth_context.login(session);
                             msg_str.set(String::new());
-                            navigate("/", NavigateOptions::default());
+                            navigate(&redirect_target, NavigateOptions::default());
                         }else{
                             show_temp_error(res.message);
                         }
@@ -425,7 +415,6 @@ pub fn CheckPasswDbView(
         });
     };
 
-
     view!{
 
         <main class="main-content auth-page">
@@ -434,15 +423,7 @@ pub fn CheckPasswDbView(
                 <h2>"Вход в систему"</h2>
                 <div class="form-group">
                     <label>"Введите пароль"</label>
-                    <input 
-                        type="text"
-
-                        prop:value=move || password.get()
-                        
-                        on:input:target=move |ev| {
-                            password.set(ev.target().value());
-                        }
-                    />
+                    <UnhiddenPassword password=password />
                 </div>
                 
                 <div class="form-footer-actions">

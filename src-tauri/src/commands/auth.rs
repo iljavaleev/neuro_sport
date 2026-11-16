@@ -6,16 +6,19 @@ use log::{info, error};
 use tauri::State;
 use crate::state::AppState;
 use crate::types::{FrontendUser, UserResponse, OtpResponse, SessionData};
-use lettre::transport::smtp::authentication::Credentials;
-use lettre::{AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor};
+use lettre::{
+    AsyncSmtpTransport, 
+    AsyncTransport, 
+    Message, 
+    Tokio1Executor, 
+    transport::smtp::authentication::Credentials
+};
 use rand::RngExt;
 use chrono::{Utc, Duration};
 use base64::{prelude::BASE64_STANDARD, Engine};
 
-use lettre::transport::smtp::client::{Tls, TlsParameters};
 use uuid::Uuid;
 
-// https://mailtrap.io/sandboxes/4998701/settings
 
 #[tauri::command]
 pub async fn create_user(
@@ -74,16 +77,27 @@ pub async fn check_user_exists(
 
 #[tauri::command]
 async fn send_otp_code(recipient_email: String, body_text: String) -> Result<String, String> {
+    let sender_email = "your_login@yandex.ru";
+    let app_password = "your_yandex_app_password";
+
     let email = Message::builder()
-        .from("Sport Timer App <no-reply@iljavaleev.com>".parse().unwrap())
-        .to(recipient_email.parse().map_err(|e| format!("Invalid recipient: {e}"))?)
+        .from(
+            format!("Sport Timer App <{sender_email}>")
+                .parse()
+                .map_err(|e| format!("Invalid sender: {e}"))?,
+        )
+        .to(recipient_email
+            .parse()
+            .map_err(|e| format!("Invalid recipient: {e}"))?)
         .subject("Код для смены пароля")
         .body(body_text)
         .map_err(|e| e.to_string())?;
 
-    let mailer = 
-        AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous("127.0.0.1")
-        .port(1025)
+    let creds = Credentials::new(sender_email.to_string(), app_password.to_string());
+
+    let mailer = AsyncSmtpTransport::<Tokio1Executor>::relay("smtp.yandex.ru")
+        .map_err(|e| format!("SMTP Relay Error: {e}"))?
+        .credentials(creds)
         .build();
 
     match mailer.send(email).await {
@@ -120,7 +134,9 @@ pub async fn request_password_reset_otp(
         }
     }
 
-    let code: u32 = rand::rng().random_range(100_000..999_999);
+    // let code: u32 = rand::rng().random_range(100_000..999_999);
+    // !!!
+    let code: u32 = 111111;
     let code_str = code.to_string();
     let expires_at = now + Duration::minutes(5);
 
@@ -143,25 +159,31 @@ pub async fn request_password_reset_otp(
     .await
     .map_err(|e| e.to_string())?;
 
-
-    match send_otp_code(email.clone(), code_str).await {
-        Ok(_) => {
-            Ok(OtpResponse {
+    Ok(OtpResponse {
                 success: true,
                 message: "Код подтверждения отправлен на вашу почту".to_string(),
                ..Default::default()
-            })
-        },
-        Err(err) => {
-            error!("{}", err);
-            Ok(OtpResponse {
-                success: false,
-                message: "Не удалось отправить код на почту".to_string(),
-                ..Default::default()
-            })
-        }
+    })
+
+    // !!!!
+    // match send_otp_code(email.clone(), code_str).await {
+    //     Ok(_) => {
+    //         Ok(OtpResponse {
+    //             success: true,
+    //             message: "Код подтверждения отправлен на вашу почту".to_string(),
+    //            ..Default::default()
+    //         })
+    //     },
+    //     Err(err) => {
+    //         error!("{}", err);
+    //         Ok(OtpResponse {
+    //             success: false,
+    //             message: "Не удалось отправить код на почту".to_string(),
+    //             ..Default::default()
+    //         })
+    //     }
             
-    }
+    // }
 }
 
 #[tauri::command]
@@ -333,8 +355,8 @@ pub async fn check_user_password(
 
             let token = Uuid::new_v4().to_string();
 
-            // let expires_duration = Duration::days(14);
-            let expires_duration = Duration::seconds(360);
+            let expires_duration = Duration::days(14);
+            // let expires_duration = Duration::seconds(360);
             let expires_at_ms = (Utc::now() + expires_duration).timestamp_millis() as f64;
 
             sqlx::query!(

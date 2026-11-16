@@ -1,11 +1,14 @@
 use leptos::{prelude::*};
 use neuro_sport_ui::{
     navbar::Navbar, 
-    sounds::SoundTimerComponent,
+    reaction::SoundTimerComponent,
     auth::{Login, Register, AuthContext},
+    main_page::MainPage,
 };
 use leptos_router::{path, components::{Router, Routes, Route, Outlet, ParentRoute}};
-use leptos_router::hooks::use_navigate;
+use leptos_router::hooks::{use_location, use_navigate};
+use leptos_router::NavigateOptions;
+
 
 
 #[component]
@@ -14,10 +17,19 @@ pub fn AppLayout(children: ChildrenFn) -> impl IntoView {
         .expect("AuthContext должен быть предоставлен на уровне выше");
     
     let navigate = use_navigate();
+    let loc = use_location();
 
     Effect::new(move |_| {
         if !auth.is_authenticated() {
-            _ = navigate("/login", Default::default());
+            let current_path = loc.pathname.get_untracked();
+            
+            let login_url = if current_path != "/" && current_path != "/login" {
+                format!("/login?redirect={}", current_path)
+            } else {
+                "/login".to_string()
+            };
+
+            navigate(&login_url, NavigateOptions::default());
         }
     });
 
@@ -59,10 +71,11 @@ fn App() -> impl IntoView{
                 <Navbar/>
                 <main class="main-content">
                     <Routes fallback=|| "Not found.">
+                        <Route path=path!("/") view=MainPage/>
                         <Route path=path!("/register") view=Register/>
                         <Route path=path!("/login") view=Login/>    
                         <ParentRoute path=path!("")  view=|| view! { <AppLayout> <Outlet/> </AppLayout> }>
-                            <Route path=path!("/") view=SoundTimerComponent/>
+                            <Route path=path!("/sound-timer") view=SoundTimerComponent/>
                         </ParentRoute>
                         <Route path=path!("/*any") view=|| view! { <h1>"Not Found"</h1> }/>
                     </Routes>

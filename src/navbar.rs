@@ -43,16 +43,16 @@ pub fn navbar() -> impl IntoView{
                    {move || if show_logout.get() {
                         Some(view! {
                             <button 
-                                class="nav-link style-as-link" 
+                                class="nav-link style-as-link ms-auto" 
                                 on:click=handle_logout
                             >
                                 "Выход"
                             </button>
-                        }.into_any()) // Добавлено .into_view()
+                        }.into_any()) 
                     } else {
                         Some(view! {
                             <a href="/login" class="nav-link ms-auto">"Вход"</a>
-                        }.into_any()) // Добавлено .into_view()
+                        }.into_any())
                     }}
                 </div>
             

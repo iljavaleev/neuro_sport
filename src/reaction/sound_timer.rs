@@ -1,6 +1,6 @@
 use leptos::{prelude::*};
-use wasm_bindgen::JsValue;
-use log::{info, error}; 
+
+use log::{error}; 
 use core::time;
 
 use std::io::{Read as read_io};
@@ -8,89 +8,23 @@ use serde::{Deserialize, Serialize};
 use serde_wasm_bindgen::to_value;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::spawn_local;
+use wasm_bindgen::JsValue;
 
-use crate::sounds::{TimerContext, UserOptions};
-
-
-#[wasm_bindgen]
-extern "C" {
-    #[wasm_bindgen(js_namespace = ["window", "__TAURI__", "core"], catch)]
-    async fn invoke(cmd: &str, args: JsValue) -> Result<JsValue, JsValue>;
-}
-
-#[wasm_bindgen]
-extern "C" {
-    #[wasm_bindgen(js_namespace = ["window", "__TAURI__", "core"], js_name = "invoke", catch)]
-    async fn invoke_no_args(cmd: &str) -> Result<JsValue, JsValue>;
-}
-
-#[wasm_bindgen]
-extern "C" {
-    #[wasm_bindgen(js_namespace = ["__TAURI__", "event"], js_name = listen)]
-    async fn tauri_listen(event_name: &str, handler: &js_sys::Function) -> JsValue;
-}
-
-
-#[derive(Serialize, Deserialize)]
-struct SoundArgs {
-    filePath: String,
-}
-
-#[derive(Serialize, Deserialize)]
-struct RoundSoundArgs {
-    options: UserOptions,
-}
-
-
-fn to_minuts_and_seconds(time_left: i64) -> (String, String){
-    let minuts = time_left / 60;
-    let seconds = time_left % 60;
-
-    let minuts_display = if minuts < 10 { format!("0{minuts}")} else {
-        format!("{minuts}")
-    };
-    let seconds_display = if seconds < 10 { format!("0{seconds}")} else {
-        format!("{seconds}")
-    };
-    
-    (minuts_display, seconds_display)
-}
-
-#[derive(Debug, Clone, Copy)]
-struct TimerStruct{
-    time_left: RwSignal<i64>,
-    minutes: RwSignal<String>,
-    seconds: RwSignal<String>, 
-}
-
-impl TimerStruct{
-    pub fn new(time_to_count: i64) -> Self {
-        let (minutes_display, seconds_display) = 
-            to_minuts_and_seconds(time_to_count);
-        
-        Self{
-                time_left: RwSignal::new(time_to_count),
-                minutes: RwSignal::new(minutes_display),
-                seconds: RwSignal::new(seconds_display),
-        }
-    }
-
-    fn update_display(&self){
-        let (minuts_display, seconds_display) = 
-            to_minuts_and_seconds(self.time_left.get());
-        *self.minutes.write() = minuts_display;
-        *self.seconds.write() = seconds_display;
-    }
- 
-}
+use crate::reaction::utils::{invoke, tauri_listen, invoke_no_args};
+use crate::reaction::types::{TimerStruct, TimerContext, UserOptions};
 
 
 #[component]
-pub fn timer(time_to_count: i64, ended: Option<RwSignal<bool>>) -> impl IntoView{
+pub fn Timer(time_to_count: i64, ended: Option<RwSignal<bool>>) -> impl IntoView{
     let timer_struct = TimerStruct::new(time_to_count);
     
     let play_sound = move || {
         spawn_local(async move {
+            #[derive(Serialize, Deserialize)]
+            struct SoundArgs {
+                filePath: String,
+            }
+
             let args = to_value(&SoundArgs 
                 { 
                     filePath:"../public/prepare/prepare_timer.mp3".to_string() 
@@ -147,15 +81,8 @@ pub fn timer(time_to_count: i64, ended: Option<RwSignal<bool>>) -> impl IntoView
         
 }
 
-
-#[derive(Deserialize, Debug, Clone)]
-struct ToFrontMessage {
-    message: bool,
-}
-
-
 #[component]
-pub fn button_timer(time_to_count: i64, ended: Option<RwSignal<bool>>) -> impl IntoView{
+pub fn ButtonTimer(time_to_count: i64, ended: Option<RwSignal<bool>>) -> impl IntoView{
     let timer_context = 
         use_context::<RwSignal<TimerContext>>()
         .expect("To find the count signal in context");
@@ -165,6 +92,11 @@ pub fn button_timer(time_to_count: i64, ended: Option<RwSignal<bool>>) -> impl I
     // backend handlers
     let play_round_timer = move || {
         spawn_local(async move {
+            #[derive(Serialize, Deserialize)]
+            struct RoundSoundArgs {
+                options: UserOptions,
+            }
+
             let args = to_value(&RoundSoundArgs { 
                 options: timer_context.get_untracked().user_options }
             ).unwrap();
@@ -182,6 +114,10 @@ pub fn button_timer(time_to_count: i64, ended: Option<RwSignal<bool>>) -> impl I
 
     let play_end_sound = move || {
         spawn_local(async move {
+            #[derive(Serialize, Deserialize)]
+            struct SoundArgs {
+                filePath: String,
+            }
             let args = to_value(&SoundArgs 
                 { 
                     filePath:"../public/prepare/end_of_round.mp3".to_string() 
@@ -379,9 +315,9 @@ pub fn button_timer(time_to_count: i64, ended: Option<RwSignal<bool>>) -> impl I
     }.into_any()
 }
 
-
 #[component]
-pub fn sound_timer() -> impl IntoView{ 
+pub fn SoundTimer() -> impl IntoView{ 
+
     let ended = RwSignal::new(false);
     let timer_context = 
         use_context::<RwSignal<TimerContext>>()

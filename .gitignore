@@ -3,3 +3,4 @@
 /Cargo.lock
 /migrations/
 /src-tauri/.sqlx
+/src-tauri/gen
