@@ -336,12 +336,3 @@ pub fn SoundTimer() -> impl IntoView{
         </Show>
     }
 }
-
-// cargo sqlx prepare -- --all-targets --all-features
-// cargo clippy
-
-// cargo fmt 
-
-// cargo audit
-
-// cargo tarpaulin --ignore-tests

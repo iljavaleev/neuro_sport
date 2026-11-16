@@ -1,12 +1,9 @@
-
-use std::{fs::File};
 use rodio::{Decoder};
-use std::io::{Read, Cursor};
+use std::io::{Cursor};
 use std::time::{self};
 
 use std::sync::atomic::{Ordering};
 
-use std::sync::{Arc};
 use log::{error, info}; 
 
 use tauri::{AppHandle, State, Emitter};
@@ -18,26 +15,55 @@ use crate::utils::get_random_delay_20;
 use std::convert::TryFrom;
 use num_enum::TryFromPrimitive;
 
+pub fn get_sound_bytes(file_path: &str) -> Option<&'static [u8]> {
+    match file_path {
+        "../public/colors/black.mp3" => Some(include_bytes!("../../../public/colors/black.mp3")),
+        "../public/colors/blue.mp3" => Some(include_bytes!("../../../public/colors/blue.mp3")),
+        "../public/colors/green.mp3" => Some(include_bytes!("../../../public/colors/green.mp3")),
+        "../public/colors/grey.mp3" => Some(include_bytes!("../../../public/colors/grey.mp3")),
+        "../public/colors/red.mp3" => Some(include_bytes!("../../../public/colors/red.mp3")),
+        "../public/colors/yellow.mp3" => Some(include_bytes!("../../../public/colors/yellow.mp3")),
+
+        "../public/directions/east.mp3" => Some(include_bytes!("../../../public/directions/east.mp3")),
+        "../public/directions/north_east.mp3" => Some(include_bytes!("../../../public/directions/north_east.mp3")),
+        "../public/directions/north_west.mp3" => Some(include_bytes!("../../../public/directions/north_west.mp3")),
+        "../public/directions/north.mp3" => Some(include_bytes!("../../../public/directions/north.mp3")),
+        "../public/directions/south_east.mp3" => Some(include_bytes!("../../../public/directions/south_east.mp3")),
+        "../public/directions/south_west.mp3" => Some(include_bytes!("../../../public/directions/south_west.mp3")),
+        "../public/directions/south.mp3" => Some(include_bytes!("../../../public/directions/south.mp3")),
+        "../public/directions/west.mp3" => Some(include_bytes!("../../../public/directions/west.mp3")),
+
+        "../public/prepare/end_of_round.mp3" => Some(include_bytes!("../../../public/prepare/end_of_round.mp3")),
+        "../public/prepare/prepare_timer.mp3" => Some(include_bytes!("../../../public/prepare/prepare_timer.mp3")),
+
+        _ => None,
+    }
+}
 
 
 #[tauri::command]
 pub async fn play_sound(file_path: String) -> Result<(), String> {
-   
-        let handle = rodio::DeviceSinkBuilder::open_default_sink()
-        .expect("open default audio stream");
-        let player = rodio::Player::connect_new(&handle.mixer());         
-        let file = File::open(file_path).unwrap();
-        
-        
-        if let Ok(source) = Decoder::try_from(file){
-            player.append(source);
-            player.sleep_until_end(); 
-            Ok(())
-        }else {
-            error!("Error decoding file");
-            Err("Error decoding file".to_string())
-        }
-  
+    let bytes = get_sound_bytes(&file_path).ok_or_else(|| {
+        error!("Sound asset not found for path: {}", file_path);
+        format!("Sound not found: {file_path}")
+    })?;
+
+    let handle = rodio::DeviceSinkBuilder::open_default_sink().map_err(|e| {
+        error!("Failed to open audio sink: {e}");
+        format!("Audio device error: {e}")
+    })?;
+
+    let player = rodio::Player::connect_new(&handle.mixer());
+    let cursor = Cursor::new(bytes);
+
+    if let Ok(source) = Decoder::try_from(cursor) {
+        player.append(source);
+        player.sleep_until_end();
+        Ok(())
+    } else {
+        error!("Error decoding embedded audio: {}", file_path);
+        Err("Error decoding audio".to_string())
+    }
 }
 
 #[tauri::command]
@@ -60,26 +86,33 @@ pub async fn start_play_sound_round(
         *round_id_guard
     };
 
-    let hndl = rodio::DeviceSinkBuilder::open_default_sink().expect("open default audio stream");
+    let hndl = rodio::DeviceSinkBuilder::open_default_sink()
+        .map_err(|e| {
+            error!("Failed to open audio sink: {e}");
+            format!("Audio device error: {e}")
+        })?;
     let player = rodio::Player::connect_new(&hndl.mixer());
     
-    if options.sounds.len() == 0{
-        let error= String::from("Empty sound list");
-        error!("{}", error.clone());
+    if options.sounds.is_empty() {
+        let error = String::from("Empty sound list");
+        error!("{}", error);
         return Err(error);
     }
 
-    let sources: Vec<Arc<[u8]>> = options.sounds.iter().map(|path| {
-            let mut file = File::open(path).unwrap();
-            let mut buffer = Vec::new();
-            file.read_to_end(&mut buffer).unwrap();
-            let shared_bytes: Arc<[u8]> = Arc::from(buffer);
-            shared_bytes
-    }).collect();
+    let mut sources: Vec<&'static [u8]> = Vec::with_capacity(options.sounds.len());
+    for path in &options.sounds {
+        let bytes = get_sound_bytes(path).ok_or_else(|| {
+            let err = format!("Sound asset not found: {path}");
+            error!("{}", err);
+            err
+        })?;
+        sources.push(bytes);
+    }
+
     let get_idx = ||  {rand::random_range(0..=options.sounds.len()-1)};
 
     let get_time_to_wait: Box<dyn Fn() -> f64 + Send> = if Some(1) == options.signal_variants {
-            Box::new(|| { get_random_delay_20(options.signal_freq) })
+        Box::new(|| { get_random_delay_20(options.signal_freq) })
     } else {
         Box::new(|| { options.signal_freq as f64 })
     };
@@ -112,9 +145,12 @@ pub async fn start_play_sound_round(
             }
         }
         
-        let bytes_clone = sources[get_idx()].clone();
-        let cursor = Cursor::new(bytes_clone);
-        let source = Decoder::new(cursor).unwrap();
+        let bytes_slice = sources[get_idx()];
+        let cursor = Cursor::new(bytes_slice);
+        let source = Decoder::new(cursor).map_err(|e| {
+            error!("Error decoding audio: {e}");
+            format!("Error decoding audio: {e}")
+        })?;
         player.append(source);
 
         

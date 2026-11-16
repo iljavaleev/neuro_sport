@@ -43,3 +43,6 @@ features = [
   "MouseEvent",
   "Storage",
 ]
+
+[target.aarch64-linux-android]
+linker = "/Users/iljavaleev/Library/Android/sdk/ndk/30.0.16248370/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android26-clang"
