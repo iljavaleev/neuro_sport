@@ -9,19 +9,7 @@ use leptos::logging::{error};
 
 use crate::auth::types::*;
 use crate::auth::utils::{UnhiddenPassword, checker, invoke};
-use leptos::ev::keydown;
-use leptos::html::Button;
-
-pub fn on_key_down<F>(f: F)
-where F: Fn() + 'static,
-{
-    let _ = window_event_listener(keydown, move |ev| {
-        if ev.key() == "Enter" {
-            ev.prevent_default();
-            f();
-        }
-    });
-}
+use crate::utils::on_key_down;
 
 
 #[component]

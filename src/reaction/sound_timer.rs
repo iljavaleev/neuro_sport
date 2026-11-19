@@ -12,6 +12,7 @@ use wasm_bindgen::JsValue;
 
 use crate::reaction::utils::{invoke, tauri_listen, invoke_no_args};
 use crate::reaction::types::{TimerStruct, TimerContext, UserOptions};
+use crate::utils::on_key_down;
 
 
 #[component]
@@ -235,6 +236,22 @@ pub fn ButtonTimer(time_to_count: i64, ended: Option<RwSignal<bool>>) -> impl In
     });
 
     let buttons_visible = RwSignal::new(false);
+
+    let go_button = move || {
+        resume_round();
+        draw_button.set(false)
+    };
+    on_key_down(go_button);
+
+
+    let pause = move || {
+        try_handle.get().unwrap().clear();
+        pause_round();
+        *buttons_visible.write() = true
+    };
+
+    on_key_down(pause);
+
     view!{
         <div class="timer-page-layout">
             <div class="timer-view-card">
@@ -257,10 +274,9 @@ pub fn ButtonTimer(time_to_count: i64, ended: Option<RwSignal<bool>>) -> impl In
                     
                     fallback=move || view! { 
                         <div class="timer-controls-row" style="grid-template-columns: 1fr;">
-                            <button class="btn-primary" on:click=move |_| { 
-                                try_handle.get().unwrap().clear();
-                                pause_round();
-                                *buttons_visible.write() = true
+                            <button class="btn-primary" on:click=move |ev| {
+                                ev.prevent_default();
+                                pause()
                             }>
                                 "Пауза"
                             </button>
@@ -299,10 +315,10 @@ pub fn ButtonTimer(time_to_count: i64, ended: Option<RwSignal<bool>>) -> impl In
                     Some(view! {
                         <button 
                             class="circle-pulse-btn"
-                            on:click=move |_| { 
-                                resume_round();
-                                draw_button.set(false)
-                                }
+                            on:click=move |ev| { 
+                                ev.prevent_default();
+                                go_button()
+                            }
                         >
                             "GO"
                         </button>

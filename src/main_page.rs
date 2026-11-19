@@ -1,7 +1,10 @@
+use leptos::ev::keydown;
 use leptos::{prelude::*};
 use std::collections::HashMap;
 use leptos_router::hooks::use_navigate;
 use leptos_router::NavigateOptions;
+use crate::utils::on_key_down;
+
 
 #[derive(Clone)]
 pub struct ProgramChoice {
@@ -55,12 +58,14 @@ pub fn MainPage() -> impl IntoView {
         });
     });
 
-    let start_exercise = move |_| {
+    let start_exercise = move || {
         let link = selected_link.get();
         if !link.is_empty() {
             navigate(&link, NavigateOptions::default());
         }
     };
+
+    on_key_down(start_exercise.clone());
     
     view! {
         <main class="main-content auth-page">
@@ -113,7 +118,10 @@ pub fn MainPage() -> impl IntoView {
                     </div>
 
                     <div class="form-footer-actions">
-                        <button class="btn-primary" on:click=start_exercise>
+                        <button class="btn-primary" on:click=move |ev|{
+                            ev.prevent_default();
+                            start_exercise()
+                        }>
                             "Перейти к упражнению"
                         </button>
                     </div>
