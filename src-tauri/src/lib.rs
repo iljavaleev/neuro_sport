@@ -7,6 +7,8 @@ pub mod utils;
 use tauri::Manager;
 use state::AppState;
 
+use log::{info, error};
+
 use commands::{ 
     play_sound, 
     start_play_sound_round, 
@@ -51,7 +53,7 @@ pub fn run() {
                 .expect("Failed to create app data directory container");
 
             let db_path = app_data_dir.join("agility_timer.db");
-
+            error!("{}", db_path.display());
             let state = tauri::async_runtime::block_on(async {
                 AppState::new(db_path)
                     .await

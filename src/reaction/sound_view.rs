@@ -4,6 +4,7 @@ use crate::reaction::types::{SoundButton, TimerContext, UserOptions};
 use leptos_icons::{Icon};
 use std::sync::LazyLock;
 use std::collections::HashSet;
+use crate::utils::on_key_down;
 
 
 static DIRECTIONS_SOUNDS: LazyLock<Vec<SoundButton>> = LazyLock::new(|| {
@@ -71,6 +72,18 @@ pub fn Sounds() -> impl IntoView {
         }
     };
 
+    let submit = move ||{
+        let sounds: Vec<String> = selected_paths.with_untracked(|set| {
+            set.iter().cloned().collect()
+        });
+
+        timer_context.update(|ctx| {
+            ctx.user_options.sounds = sounds;
+            ctx.view_timer = true;
+        });
+    }; 
+
+    on_key_down(submit);
 
     view! {
         <div class="settings-grid">
@@ -234,15 +247,9 @@ pub fn Sounds() -> impl IntoView {
             <button 
                 type="button"
                 class="btn-primary" 
-                on:click=move |_| {
-                    let sounds: Vec<String> = selected_paths.with_untracked(|set| {
-                        set.iter().cloned().collect()
-                    });
-
-                    timer_context.update(|ctx| {
-                        ctx.user_options.sounds = sounds;
-                        ctx.view_timer = true;
-                    });
+                on:click=move |ev| {
+                    ev.prevent_default();
+                    submit()
                 }
             >
                 "Начать"
