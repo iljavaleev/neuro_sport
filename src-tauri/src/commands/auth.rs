@@ -57,7 +57,7 @@ pub async fn check_user_exists(
     state: State<'_, AppState>,
     email: String
 ) -> Result<UserResponse, String> {
-    
+
     let row = sqlx::query!(
         "SELECT id, email FROM user WHERE email = ?",
         email

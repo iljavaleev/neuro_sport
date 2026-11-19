@@ -5,9 +5,23 @@ use leptos_router::NavigateOptions;
 
 use serde_wasm_bindgen::{from_value, to_value};
 use wasm_bindgen_futures::spawn_local;
-use leptos::logging::{error}; 
+use leptos::logging::{error};
+
 use crate::auth::types::*;
 use crate::auth::utils::{UnhiddenPassword, checker, invoke};
+use leptos::ev::keydown;
+use leptos::html::Button;
+
+pub fn on_key_down<F>(f: F)
+where F: Fn() + 'static,
+{
+    let _ = window_event_listener(keydown, move |ev| {
+        if ev.key() == "Enter" {
+            ev.prevent_default();
+            f();
+        }
+    });
+}
 
 
 #[component]
@@ -20,7 +34,7 @@ pub fn Register() -> impl IntoView{
     let navigate = use_navigate();
     let view_nav = navigate.clone();
     
-    let exit_button = move |_| {
+    let exit_button = move || {
         
         if password1.with(|p| *p != password2.get()){
             msg_str.set("Пароли не совпадают".to_string());
@@ -49,7 +63,7 @@ pub fn Register() -> impl IntoView{
             let args = to_value(&payload).unwrap();
 
             let redirect_target = query_map.with_untracked(|params| {
-                params.get("redirect").unwrap_or_else(|| "/".to_string())
+                params.get("redirect").unwrap_or_else(|| "/login".to_string())
             });
             
             if let Err(err) = invoke("create_user", args).await{
@@ -63,8 +77,7 @@ pub fn Register() -> impl IntoView{
             }
         });
     };
-
-
+    on_key_down(exit_button);
 
     view!{
         <main class="main-content auth-page">
@@ -98,7 +111,6 @@ pub fn Register() -> impl IntoView{
                         <label>"Дата рождения"</label>
                         <input 
                             type="date"
-
                             prop:value=move || {
                                 user_info.with(|info| {
                                     info.date_of_birth
@@ -142,7 +154,10 @@ pub fn Register() -> impl IntoView{
                             })
                         }}
                         <div class="form-footer-actions">
-                            <button type="submit" class="btn-primary" on:click=exit_button>
+                            <button type="submit" class="btn-primary" on:click=move |ev| {
+                                ev.prevent_default();
+                                exit_button()
+                            }>
                                 "Завершить"
                             </button>
                             
@@ -177,7 +192,7 @@ pub fn CheckEmailView (
         navigate(&target, NavigateOptions::default());
     };
 
-    let continue_btn = move |_| {
+    let continue_btn = move || {
         let email = db_user.with(|u| u.email.clone());
         
         spawn_local(async move {
@@ -204,6 +219,7 @@ pub fn CheckEmailView (
         });
     };
 
+    on_key_down(continue_btn);
     view!{
         <main class="main-content auth-page">
         <div class="auth-top-wrapper">
@@ -233,7 +249,10 @@ pub fn CheckEmailView (
                     })
                 }}
                 <div class="form-footer-actions">
-                    <button class="btn-primary" on:click=continue_btn>
+                    <button class="btn-primary" on:click=move|ev| {
+                        ev.prevent_default();
+                        continue_btn()
+                    }>
                         "Продолжить"
                     </button>
                     
@@ -268,7 +287,7 @@ pub fn UpdatePasswDbView(
     let new_pass = RwSignal::new(String::new());
     let new_pass2 = RwSignal::new(String::new());
 
-    let submit_update_pass = move |_| {
+    let submit_update_pass = move || {
         let passwd = new_pass.get();
         
         if let Err(err) = checker::check_password(&passwd) {
@@ -299,6 +318,8 @@ pub fn UpdatePasswDbView(
         });
     };
 
+    on_key_down(submit_update_pass);
+
     view! {
         <main class="main-content auth-page">
         <div class="auth-top-wrapper">
@@ -322,7 +343,11 @@ pub fn UpdatePasswDbView(
                         })
                     }}
                     
-                    <button class="btn-primary" on:click=submit_update_pass>
+                    <button class="btn-primary" on:click= move|ev|
+                    {   
+                        ev.prevent_default();
+                        submit_update_pass()
+                    }>
                         "Сохранить"
                     </button>
 
@@ -372,10 +397,8 @@ pub fn CheckPasswDbView(
             clear_timer.set_value(Some(handle));
         }
     };
-    
-    
-    
-    let submit_check_pass = move |_| {
+        
+    let submit_check_pass = move || {
         let navigate = nav.clone();
         let id = db_user.with(|u| u.id.clone());
         
@@ -415,6 +438,7 @@ pub fn CheckPasswDbView(
         });
     };
 
+    on_key_down(submit_check_pass.clone());
     view!{
 
         <main class="main-content auth-page">
@@ -426,7 +450,7 @@ pub fn CheckPasswDbView(
                     <UnhiddenPassword password=password />
                 </div>
                 
-                <div class="form-footer-actions">
+                <div class="form-footer-actions" >
                     {move || {
                         let error = msg_str.get();
                         (!error.is_empty()).then(|| view! { 
@@ -435,7 +459,10 @@ pub fn CheckPasswDbView(
                             </div> 
                         })
                     }}
-                    <button class="btn-primary" on:click=submit_check_pass>
+                    <button class="btn-primary" on:click=move |ev| {
+                        ev.prevent_default();
+                        submit_check_pass()
+                    }>
                         "Вход"
                     </button>
                 
@@ -595,6 +622,14 @@ pub fn ForgotPasswordView(
 
     let is_loading = move || request_otp_action.pending().get() || verify_otp_action.pending().get();
 
+    let email = email_current.clone();
+    let send_code = move || { request_otp_action.dispatch(email.clone()); };
+    on_key_down(send_code);
+    
+    let email_to_check = email_for_verify.clone();
+    let verify_code =  move|| { verify_otp_action.dispatch((email_to_check.clone(), code.get())); };
+    on_key_down(verify_code);
+    
     view! {
         <main class="main-content auth-page">
             <div class="auth-top-wrapper">
