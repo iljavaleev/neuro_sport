@@ -28,7 +28,7 @@ pub fn Timer(time_to_count: i64, ended: Option<RwSignal<bool>>) -> impl IntoView
 
             let args = to_value(&SoundArgs 
                 { 
-                    filePath:"../public/prepare/prepare_timer.mp3".to_string() 
+                    filePath:"prepare/prepare_timer.mp3".to_string() 
                 }).unwrap();
             match invoke("play_sound", args).await{
                 Ok(_) => (),
@@ -121,7 +121,7 @@ pub fn ButtonTimer(time_to_count: i64, ended: Option<RwSignal<bool>>) -> impl In
             }
             let args = to_value(&SoundArgs 
                 { 
-                    filePath:"../public/prepare/end_of_round.mp3".to_string() 
+                    filePath:"prepare/end_of_round.mp3".to_string() 
                 }).unwrap();
 
             match invoke("play_sound", args).await{

@@ -6,6 +6,7 @@ pub mod utils;
 
 use tauri::Manager;
 use state::AppState;
+use utils::init_resource_dir;
 
 use log::{info, error};
 
@@ -30,6 +31,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_log::Builder::default().build())
+        .plugin(tauri_plugin_fs::init())
         .invoke_handler(tauri::generate_handler![
             play_sound, 
             start_play_sound_round, 
@@ -46,6 +48,7 @@ pub fn run() {
 
         ])
         .setup(|app| {
+            init_resource_dir(app.handle());
             let app_data_dir = app.path().app_data_dir()
                 .expect("Failed to resolve local app data directory");
             

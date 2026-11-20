@@ -1,52 +1,36 @@
 use rodio::{Decoder};
 use std::io::{Cursor};
 use std::time::{self};
-
+use std::sync::Arc;
 use std::sync::atomic::{Ordering};
 
 use log::{error, info}; 
-
 use tauri::{AppHandle, State, Emitter};
+use tauri_plugin_fs::FsExt;
 use crate::state::AppState;
 use crate::types::{UserOptions, ToFrontMessage, TouchOption};
-use crate::utils::get_random_delay_20;
-
+use crate::utils::{get_random_delay_20, RESOURCE_DIR};
 
 use std::convert::TryFrom;
 use num_enum::TryFromPrimitive;
 
-pub fn get_sound_bytes(file_path: &str) -> Option<&'static [u8]> {
-    match file_path {
-        "../public/colors/black.mp3" => Some(include_bytes!("../../../public/colors/black.mp3")),
-        "../public/colors/blue.mp3" => Some(include_bytes!("../../../public/colors/blue.mp3")),
-        "../public/colors/green.mp3" => Some(include_bytes!("../../../public/colors/green.mp3")),
-        "../public/colors/grey.mp3" => Some(include_bytes!("../../../public/colors/grey.mp3")),
-        "../public/colors/red.mp3" => Some(include_bytes!("../../../public/colors/red.mp3")),
-        "../public/colors/yellow.mp3" => Some(include_bytes!("../../../public/colors/yellow.mp3")),
 
-        "../public/directions/east.mp3" => Some(include_bytes!("../../../public/directions/east.mp3")),
-        "../public/directions/north_east.mp3" => Some(include_bytes!("../../../public/directions/north_east.mp3")),
-        "../public/directions/north_west.mp3" => Some(include_bytes!("../../../public/directions/north_west.mp3")),
-        "../public/directions/north.mp3" => Some(include_bytes!("../../../public/directions/north.mp3")),
-        "../public/directions/south_east.mp3" => Some(include_bytes!("../../../public/directions/south_east.mp3")),
-        "../public/directions/south_west.mp3" => Some(include_bytes!("../../../public/directions/south_west.mp3")),
-        "../public/directions/south.mp3" => Some(include_bytes!("../../../public/directions/south.mp3")),
-        "../public/directions/west.mp3" => Some(include_bytes!("../../../public/directions/west.mp3")),
+pub fn load_sound_from_resources(app: &AppHandle, file_path: &str) -> Result<Vec<u8>, String> {
+    let base_dir = RESOURCE_DIR
+        .get()
+        .ok_or_else(|| "Resource directory is not initialized".to_string())?;
 
-        "../public/prepare/end_of_round.mp3" => Some(include_bytes!("../../../public/prepare/end_of_round.mp3")),
-        "../public/prepare/prepare_timer.mp3" => Some(include_bytes!("../../../public/prepare/prepare_timer.mp3")),
+    let full_path = base_dir.join(file_path);
 
-        _ => None,
-    }
+    app.fs()
+        .read(full_path)
+        .map_err(|e| format!("Sound load error ({file_path}): {e}"))
 }
 
 
 #[tauri::command]
-pub async fn play_sound(file_path: String) -> Result<(), String> {
-    let bytes = get_sound_bytes(&file_path).ok_or_else(|| {
-        error!("Sound asset not found for path: {}", file_path);
-        format!("Sound not found: {file_path}")
-    })?;
+pub async fn play_sound(app: AppHandle, file_path: String) -> Result<(), String> {
+    let bytes = load_sound_from_resources(&app, &file_path)?;
 
     let handle = rodio::DeviceSinkBuilder::open_default_sink().map_err(|e| {
         error!("Failed to open audio sink: {e}");
@@ -99,14 +83,10 @@ pub async fn start_play_sound_round(
         return Err(error);
     }
 
-    let mut sources: Vec<&'static [u8]> = Vec::with_capacity(options.sounds.len());
+    let mut sources: Vec<Arc<[u8]>> = Vec::with_capacity(options.sounds.len());
     for path in &options.sounds {
-        let bytes = get_sound_bytes(path).ok_or_else(|| {
-            let err = format!("Sound asset not found: {path}");
-            error!("{}", err);
-            err
-        })?;
-        sources.push(bytes);
+        let bytes = load_sound_from_resources(&app, &path)?;
+        sources.push(Arc::from(bytes));
     }
 
     let get_idx = ||  {rand::random_range(0..=options.sounds.len()-1)};
@@ -145,7 +125,7 @@ pub async fn start_play_sound_round(
             }
         }
         
-        let bytes_slice = sources[get_idx()];
+        let bytes_slice = sources[get_idx()].clone();
         let cursor = Cursor::new(bytes_slice);
         let source = Decoder::new(cursor).map_err(|e| {
             error!("Error decoding audio: {e}");

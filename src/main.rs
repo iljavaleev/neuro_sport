@@ -1,13 +1,14 @@
 use leptos::{prelude::*};
 use neuro_sport_ui::{
     navbar::Navbar, 
-    reaction::SoundTimerComponent,
+    reaction::DoBySignal,
     auth::{Login, Register, AuthContext},
     main_page::MainPage,
 };
 use leptos_router::{path, components::{Router, Routes, Route, Outlet, ParentRoute}};
 use leptos_router::hooks::{use_location, use_navigate};
 use leptos_router::NavigateOptions;
+
 
 
 
@@ -75,7 +76,7 @@ fn App() -> impl IntoView{
                         <Route path=path!("/register") view=Register/>
                         <Route path=path!("/login") view=Login/>    
                         <ParentRoute path=path!("")  view=|| view! { <AppLayout> <Outlet/> </AppLayout> }>
-                            <Route path=path!("/sound-timer") view=SoundTimerComponent/>
+                            <Route path=path!("/sound-timer") view=DoBySignal/>
                         </ParentRoute>
                         <Route path=path!("/*any") view=|| view! { <h1>"Not Found"</h1> }/>
                     </Routes>

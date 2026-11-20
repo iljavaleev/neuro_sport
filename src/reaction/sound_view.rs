@@ -10,30 +10,30 @@ use crate::utils::on_key_down;
 static DIRECTIONS_SOUNDS: LazyLock<Vec<SoundButton>> = LazyLock::new(|| {
     let style = "width: 3em; height: 3em; color: #374151;";
     vec![
-        SoundButton { icon: &icondata::BsArrowUpLeft, style, path: "../public/directions/north_west.mp3".to_string() },
-        SoundButton { icon: &icondata::BsArrowUpRight, style, path: "../public/directions/north_east.mp3".to_string() },
-        SoundButton { icon: &icondata::BsArrowDownRight, style, path: "../public/directions/south_east.mp3".to_string() },
-        SoundButton { icon: &icondata::BsArrowDownLeft, style, path: "../public/directions/south_west.mp3".to_string() },
-        SoundButton { icon: &icondata::BsArrowUp, style, path: "../public/directions/north.mp3".to_string() },
-        SoundButton { icon: &icondata::BsArrowLeft, style, path: "../public/directions/west.mp3".to_string() },
-        SoundButton { icon: &icondata::BsArrowRight, style, path: "../public/directions/east.mp3".to_string() },
-        SoundButton { icon: &icondata::BsArrowDown, style, path: "../public/directions/south.mp3".to_string() },
+        SoundButton { icon: &icondata::BsArrowUpLeft, style, path: "directions/north_west.mp3".to_string() },
+        SoundButton { icon: &icondata::BsArrowUpRight, style, path: "directions/north_east.mp3".to_string() },
+        SoundButton { icon: &icondata::BsArrowDownRight, style, path: "directions/south_east.mp3".to_string() },
+        SoundButton { icon: &icondata::BsArrowDownLeft, style, path: "directions/south_west.mp3".to_string() },
+        SoundButton { icon: &icondata::BsArrowUp, style, path: "directions/north.mp3".to_string() },
+        SoundButton { icon: &icondata::BsArrowLeft, style, path: "directions/west.mp3".to_string() },
+        SoundButton { icon: &icondata::BsArrowRight, style, path: "directions/east.mp3".to_string() },
+        SoundButton { icon: &icondata::BsArrowDown, style, path: "directions/south.mp3".to_string() },
     ]
 });
 
 static COLORS_SOUNDS: LazyLock<Vec<SoundButton>> = LazyLock::new(|| {
     vec![
-        SoundButton { icon: &icondata::BsSquareFill, style: "width: 3em; height: 3em; color: #df1010;", path: "../public/colors/red.mp3".to_string() },
-        SoundButton { icon: &icondata::BsSquareFill, style: "width: 3em; height: 3em; color: #104fe2;", path: "../public/colors/blue.mp3".to_string() },
-        SoundButton { icon: &icondata::BsSquareFill, style: "width: 3em; height: 3em; color: #0e0b0b;", path: "../public/colors/black.mp3".to_string() },
-        SoundButton { icon: &icondata::BsSquareFill, style: "width: 3em; height: 3em; color: #0e6906;", path: "../public/colors/green.mp3".to_string() },
-        SoundButton { icon: &icondata::BsSquareFill, style: "width: 3em; height: 3em; color: #d6e62f;", path: "../public/colors/yellow.mp3".to_string() },
-        SoundButton { icon: &icondata::BsSquareFill, style: "width: 3em; height: 3em; color: #827777;", path: "../public/colors/grey.mp3".to_string() },
+        SoundButton { icon: &icondata::BsSquareFill, style: "width: 3em; height: 3em; color: #df1010;", path: "colors/red.mp3".to_string() },
+        SoundButton { icon: &icondata::BsSquareFill, style: "width: 3em; height: 3em; color: #104fe2;", path: "colors/blue.mp3".to_string() },
+        SoundButton { icon: &icondata::BsSquareFill, style: "width: 3em; height: 3em; color: #0e0b0b;", path: "colors/black.mp3".to_string() },
+        SoundButton { icon: &icondata::BsSquareFill, style: "width: 3em; height: 3em; color: #0e6906;", path: "colors/green.mp3".to_string() },
+        SoundButton { icon: &icondata::BsSquareFill, style: "width: 3em; height: 3em; color: #d6e62f;", path: "colors/yellow.mp3".to_string() },
+        SoundButton { icon: &icondata::BsSquareFill, style: "width: 3em; height: 3em; color: #827777;", path: "colors/grey.mp3".to_string() },
     ]
 });
 
 #[component]
-pub fn SoundTimerComponent() -> impl IntoView{
+pub fn SoundTimerComponent(children: Children) -> impl IntoView{
     let timer_context = TimerContext{
         user_options: UserOptions::new(),
         view_timer: false,
@@ -43,8 +43,7 @@ pub fn SoundTimerComponent() -> impl IntoView{
     provide_context(timer_context_signal);
 
     view! {
-        <p class="task-banner">"Задача: вы выполняете действие в течение заданного времени и 
-        реагируете на звуковые сигналы, выполняя движения"</p>
+        {children()}
         <Show
             when=move || {  (*timer_context_signal.read()).view_timer == true }
             fallback=|| view! { <Sounds/> }
